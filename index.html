@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Weaver</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-bg': 'var(--color-bg, #101010)',
+              'surface': 'var(--color-surface, #1e1e1e)',
+              'surface-light': 'var(--color-surface-light, #2a2a2a)',
+              'primary': 'var(--color-primary, #a855f7)',
+              'primary-hover': 'var(--color-primary-hover, #9333ea)',
+              'text-main': 'var(--color-text-main, #f9fafb)',
+              'text-secondary': 'var(--color-text-secondary, #a1a1aa)',
+              'border-color': 'var(--color-border, #3f3f46)',
+              'sepia-bg': '#fbf3e6',
+              'sepia-text': '#5a4d3c',
+              'high-contrast-bg': '#000000',
+              'high-contrast-text': '#FFFFFF',
+              'high-contrast-primary': '#FFFF00',
+              'high-contrast-surface': '#1a1a1a',
+              // Neon Noir Theme
+              'neon-noir-bg': '#0d0221',
+              'neon-noir-surface': '#261447',
+              'neon-noir-primary': '#00f5d4',
+              'neon-noir-primary-hover': '#98fff1',
+              'neon-noir-text': '#f0f0f0',
+              // Pro badge
+              'pro-gold': '#FFD700',
+              'pro-gold-bg': 'rgba(255, 215, 0, 0.1)',
+            },
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+              serif: ['Lora', 'serif'],
+              dyslexic: ['OpenDyslexic', 'sans-serif'],
+              kids: ['Comic Sans MS', 'sans-serif'], // Font for Weaver Kids
+            },
+            typography: (theme) => ({
+              invert: {
+                css: {
+                  '--tw-prose-body': 'var(--prose-body-color, theme(\'colors.text-main\'))',
+                  '--tw-prose-headings': 'var(--prose-headings-color, theme(\'colors.white\'))',
+                  '--tw-prose-lead': 'var(--prose-lead-color, theme(\'colors.text-secondary\'))',
+                  '--tw-prose-links': 'var(--prose-links-color, theme(\'colors.primary\'))',
+                  '--tw-prose-bold': 'var(--prose-bold-color, theme(\'colors.white\'))',
+                  '--tw-prose-counters': 'var(--prose-counters-color, theme(\'colors.text-secondary\'))',
+                  '--tw-prose-bullets': 'var(--prose-bullets-color, theme(\'colors.border-color\'))',
+                  '--tw-prose-hr': 'var(--prose-hr-color, theme(\'colors.border-color\'))',
+                  '--tw-prose-quotes': 'var(--prose-quotes-color, theme(\'colors.text-main\'))',
+                  '--tw-prose-quote-borders': 'var(--prose-quote-borders-color, theme(\'colors.primary\'))',
+                  '--tw-prose-captions': 'var(--prose-captions-color, theme(\'colors.text-secondary\'))',
+                  '--tw-prose-code': 'var(--prose-code-color, theme(\'colors.white\'))',
+                  '--tw-prose-pre-code': 'var(--prose-pre-code-color, theme(\'colors.text-main\'))',
+                  '--tw-prose-pre-bg': 'var(--prose-pre-bg-color, theme(\'colors.surface-light\'))',
+                  '--tw-prose-th-borders': 'var(--prose-th-borders-color, theme(\'colors.border-color\'))',
+                  '--tw-prose-td-borders': 'var(--prose-td-borders-color, theme(\'colors.border-color\'))',
+                },
+              },
+            }),
+             keyframes: {
+                gradient: {
+                    '0%': { backgroundPosition: '0% 50%' },
+                    '50%': { backgroundPosition: '100% 50%' },
+                    '100%': { backgroundPosition: '0% 50%' },
+                },
+                'palette-enter': {
+                  '0%': { opacity: '0', transform: 'scale(0.95) translateY(-10px)' },
+                  '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+                }
+            },
+            animation: {
+                'gradient-slow': 'gradient 15s ease infinite',
+                'palette-enter': 'palette-enter 0.2s ease-out forwards',
+            },
+          }
+        }
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Lora:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css?family=Open+Dyslexic&display=swap" rel="stylesheet">
+    <style>
+        :root.theme-solarized {
+            --color-bg: #002b36;
+            --color-surface: #073642;
+            --color-surface-light: #586e75;
+            --color-primary: #268bd2;
+            --color-primary-hover: #839496;
+            --color-text-main: #eee8d5;
+            --color-text-secondary: #93a1a1;
+            --color-border: #657b83;
+        }
+        :root.theme-dracula {
+            --color-bg: #282a36;
+            --color-surface: #343746;
+            --color-surface-light: #44475a;
+            --color-primary: #bd93f9;
+            --color-primary-hover: #ff79c6;
+            --color-text-main: #f8f8f2;
+            --color-text-secondary: #6272a4;
+            --color-border: #6272a4;
+        }
+        :root.theme-kids {
+            --color-bg: #f0f8ff;
+            --color-surface: #ffffff;
+            --color-surface-light: #e6f2ff;
+            --color-primary: #ff6347; /* Tomato */
+            --color-primary-hover: #ff4500; /* Orangered */
+            --color-text-main: #333333;
+            --color-text-secondary: #555555;
+            --color-border: #d1e0ff;
+        }
+
+        body.theme-kids {
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+        }
+
+        .pro-library-bg {
+            background: linear-gradient(-45deg, #121212, #0d0221, #121212, #261447);
+            background-size: 400% 400%;
+        }
+        .avatar-frame-gold {
+            box-shadow: 0 0 15px 3px rgba(255, 215, 0, 0.7), inset 0 0 5px 1px rgba(255, 215, 0, 0.5);
+            border-color: #FFD700 !important;
+        }
+        .avatar-frame-neon {
+            border-color: #00f5d4 !important;
+            box-shadow: 0 0 15px 3px rgba(0, 245, 212, 0.6), inset 0 0 5px 1px rgba(0, 245, 212, 0.4);
+        }
+        .bionic-reading b {
+            font-weight: 700;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.1.1/",
+    "react": "https://esm.sh/react@^19.1.1",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.13.0",
+    "pdfjs-dist": "https://esm.sh/pdfjs-dist@^4.6.1",
+    "jspdf": "https://esm.sh/jspdf@^2.5.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-brand-bg text-text-main font-sans antialiased">
+    <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

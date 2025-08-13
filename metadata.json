@@ -1,0 +1,9 @@
+{
+  "name": "Weaver",
+  "description": "An advanced AI-powered web application for generating, reading, and managing custom stories. Craft original narratives with deep customization and AI-generated illustrations.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "prompt": ""
+}
