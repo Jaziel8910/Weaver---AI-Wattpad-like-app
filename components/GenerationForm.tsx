@@ -61,6 +61,7 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
     contentRating: 'Teen',
     weaverAgeRating: 'Teen',
     universeId: '',
+    crossoverUniverseIds: [],
   });
   
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
@@ -122,6 +123,15 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
       ? params.genres.filter(g => g !== genre)
       : [...params.genres, genre];
     handleParamChange('genres', newGenres);
+  };
+
+  const handleCrossoverToggle = (universeId: string) => {
+    if (!isProOrHigher) return;
+    const currentCrossovers = params.crossoverUniverseIds || [];
+    const newCrossovers = currentCrossovers.includes(universeId)
+        ? currentCrossovers.filter(id => id !== universeId)
+        : [...currentCrossovers, universeId];
+    handleParamChange('crossoverUniverseIds', newCrossovers);
   };
   
   const handleSuggestName = async (char: Character) => {
@@ -251,13 +261,37 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
                 )}
             </div>
              <div className={`mt-6 ${isLegacyMode ? 'opacity-50' : ''}`}>
-                <label htmlFor="universe" className="block text-sm font-medium text-text-secondary">Universo (Opcional)</label>
+                <label htmlFor="universe" className="block text-sm font-medium text-text-secondary">Universo Principal (Opcional)</label>
                 <select id="universe" value={params.universeId} onChange={e => handleParamChange('universeId', e.target.value)} disabled={isLegacyMode} className="mt-1 block w-full bg-brand-bg border border-border-color rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm disabled:cursor-not-allowed disabled:bg-surface-light">
                     <option value="">Ninguno (Historia Independiente)</option>
                     {universes.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                 </select>
-                <p className="text-xs text-text-secondary mt-1">{isLegacyMode ? 'La vinculación con Universos está desactivada en el modo de compatibilidad.' : 'Vincula esta historia a un universo que hayas creado en el Hub de Universos.'}</p>
+                <p className="text-xs text-text-secondary mt-1">{isLegacyMode ? 'La vinculación con Universos está desactivada en el modo de compatibilidad.' : 'Vincula esta historia a un universo que hayas creado.'}</p>
             </div>
+            {params.storyType === 'Original' && !isLegacyMode && (
+                <div className="mt-6 relative">
+                    <label className="block text-sm font-medium text-text-secondary">Universo(s) de Crossover (Opcional)</label>
+                    <div className={`flex flex-wrap gap-2 mt-2 p-2 bg-brand-bg rounded-md border border-border-color min-h-[40px] ${!isProOrHigher ? 'pointer-events-none' : ''}`}>
+                        {universes.filter(u => params.universeId !== u.id).map(u => (
+                            <button
+                                type="button"
+                                key={u.id}
+                                onClick={() => handleCrossoverToggle(u.id)}
+                                className={`px-3 py-1 text-xs font-medium rounded-full border ${params.crossoverUniverseIds?.includes(u.id) ? 'bg-primary border-primary text-white' : 'bg-surface border-border-color hover:border-primary'}`}
+                            >
+                                {u.name}
+                            </button>
+                        ))}
+                        {universes.length <= 1 && <p className="text-xs text-text-secondary">Crea más universos para habilitar los crossovers.</p>}
+                    </div>
+                    <p className="text-xs text-text-secondary mt-1">Combina el lore de múltiples universos en una sola historia.</p>
+                    {!isProOrHigher && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-md z-10 bg-black/60 backdrop-blur-sm cursor-not-allowed">
+                           <ProBadge isLocked tierName="PRO" />
+                        </div>
+                    )}
+                </div>
+            )}
             <div className="mt-6">
                  <div className="flex items-center gap-4 mb-2">
                     <label className="block text-sm font-medium text-text-secondary">Géneros</label>

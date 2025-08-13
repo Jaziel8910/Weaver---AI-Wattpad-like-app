@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse, Part, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import type { GenerationParams, PilotChapterResponse, RemainingStoryResponse, ImageQuality, Character, Story, WeaverAgeRating, Chapter, Genre } from '../types';
+import type { GenerationParams, PilotChapterResponse, RemainingStoryResponse, ImageQuality, Character, Story, WeaverAgeRating, Chapter, Genre, Universe } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
@@ -97,9 +97,23 @@ const getWordCountTarget = (length: GenerationParams['chapterLength']): number =
     }
 }
 
-const buildPromptBase = (params: GenerationParams, story?: Story) => {
-    const { storyType, fandom, setting, genres, characters, plotOutline, writingStyle, pointOfView, complexity, tone, pacing, inspirationPrompt, weaverAgeRating } = params;
+const buildPromptBase = (params: GenerationParams, story?: Story, allUniverses?: Universe[]) => {
+    let basePrompt = '';
+    const { storyType, fandom, setting, genres, characters, plotOutline, writingStyle, pointOfView, complexity, tone, pacing, inspirationPrompt, weaverAgeRating, crossoverUniverseIds } = params;
     
+    // Crossover Event Handling
+    if (crossoverUniverseIds && allUniverses && crossoverUniverseIds.length > 0) {
+        const crossoverUniverses = allUniverses.filter(u => crossoverUniverseIds.includes(u.id));
+        if (crossoverUniverses.length > 0) {
+            basePrompt += `\n**EVENTO CROSSOVER:** Esta historia es un cruce entre los universos: ${crossoverUniverses.map(u => `"${u.name}"`).join(', ')}. Debes integrar de forma coherente el lore y los personajes de estos mundos.\n`;
+            
+            const crossoverLore = crossoverUniverses.map(uni => {
+                return `--- LORE DEL UNIVERSO CROSSOVER: ${uni.name} ---\nDescripción: ${uni.description}\nHistoria: ${uni.history}\nLeyes del Mundo: ${uni.worldLaws}\n--- FIN DEL LORE ---\n`;
+            }).join('\n');
+            basePrompt += `\n**LORE DE UNIVERSOS CROSSOVER (Referencia Clave):**\n${crossoverLore}\n`;
+        }
+    }
+
     const characterDescriptions = characters.map(c => {
         const memory = c.memoryVector ? `\n    - Memoria Reciente: ${c.memoryVector.join(', ')}` : '';
         return `- ${c.name} (${c.role}): ${c.description}${memory}`;
@@ -107,7 +121,7 @@ const buildPromptBase = (params: GenerationParams, story?: Story) => {
 
     const loreBookEntries = story?.loreBook?.map(l => `- ${l.title} (${l.category}): ${l.content}`).join('\n');
 
-    return `
+    basePrompt += `
       **TIPO DE HISTORIA:** ${storyType}
       ${storyType === 'Fanfiction' ? `**FANDOM:** ${fandom}` : `**AMBIENTACIÓN ORIGINAL:** ${setting}`}
       ${inspirationPrompt ? `**INSPIRACIÓN INICIAL:** ${inspirationPrompt}` : ''}
@@ -135,23 +149,16 @@ const buildPromptBase = (params: GenerationParams, story?: Story) => {
       - Ritmo de la historia: ${pacing}
       - Complejidad de la trama: ${complexity}. Una complejidad 'Alta' debe incluir giros inesperados, subtramas profundas y desarrollo de personajes complejo.
     `;
+    return basePrompt;
 };
 
-export const generatePilotChapter = async (params: GenerationParams): Promise<PilotChapterResponse> => {
+export const generatePilotChapter = async (params: GenerationParams, allUniverses: Universe[]): Promise<PilotChapterResponse> => {
     const { chapterLength, contextFiles, enableBranching, weaverAgeRating } = params;
     const wordCount = getWordCountTarget(chapterLength);
-    const promptBase = buildPromptBase(params);
+    const promptBase = buildPromptBase(params, undefined, allUniverses);
     
     const contextText = contextFiles.filter(f => f.type === 'text' || f.type === 'pdf').map(f => `--- CONTEXTO DEL ARCHIVO: ${f.name} ---\n${f.content}\n--- FIN DEL CONTEXTO ---`).join('\n\n');
 
-    /* 
-      Weaver Kids Curation Rules (for programmatic pre-check before human review):
-      - Profanity Filter: Story content must not contain words from a blocklist of profanities.
-      - Violence Filter: Block descriptors of graphic violence (e.g., 'blood', 'kill', 'gore', 'wound').
-      - Thematic Filter: Block mature themes (e.g., 'death', 'war', 'sex', 'drugs', 'alcohol').
-      - Sentiment Analysis: Overall story sentiment must be neutral to positive.
-      - Readability Score: Content should meet a Flesch-Kincaid grade level of 8 or lower.
-    */
     const kidsPreamble = `\n**MODO NIÑOS ACTIVADO: La historia DEBE ser apta para todas las edades. El tono debe ser positivo y educativo. No incluyas violencia, temas de miedo o conceptos complejos. Concéntrate en la amistad, la aventura y el aprendizaje.\n`;
 
     const prompt = `
@@ -201,13 +208,13 @@ export const generatePilotChapter = async (params: GenerationParams): Promise<Pi
     }
 };
 
-export const generateRemainingStory = async (params: GenerationParams, pilotData: PilotChapterResponse, previousChapters: Chapter[], feedback: string, story?: Story): Promise<RemainingStoryResponse> => {
+export const generateRemainingStory = async (params: GenerationParams, pilotData: PilotChapterResponse, previousChapters: Chapter[], feedback: string, story?: Story, allUniverses?: Universe[]): Promise<RemainingStoryResponse> => {
     const { chapters, chapterLength, enableBranching, weaverAgeRating } = params;
     const remainingChaptersCount = chapters - 1;
     if (remainingChaptersCount <= 0) return { chapters: [] };
     
     const wordCount = getWordCountTarget(chapterLength);
-    const promptBase = buildPromptBase(params, story);
+    const promptBase = buildPromptBase(params, story, allUniverses);
     const kidsPreamble = `\n**MODO NIÑOS ACTIVADO: La historia DEBE ser apta para todas las edades. El tono debe ser positivo y educativo. No incluyas violencia, temas de miedo o conceptos complejos. Concéntrate en la amistad, la aventura y el aprendizaje.\n`;
 
     const prompt = `
@@ -411,7 +418,7 @@ export const updateCharacterMemory = async (characterName: string, chapterConten
 };
 
 export const critiqueChapter = async (chapterContent: string): Promise<any> => {
-    const prompt = `Actúa como un editor literario experto. Analiza el siguiente capítulo y proporciona una crítica constructiva. Evalúa el ritmo, el diálogo, la descripción y la coherencia. Para cada categoría, da una puntuación del 1 al 10 y un comentario conciso con una sugerencia de mejora.\n\nCapítulo:\n"${chapterContent}"`;
+    const prompt = `Actúa como un editor literario experto. Analiza el siguiente capítulo y proporciona una crítica constructiva. Evalúa el ritmo, el diálogo, la descripción y la coherencia. Para cada categoría, da una puntuación del 1 al 10 y un comentario conciso con una sugerencia de mejora. Además, proporciona un 'emotionalArc', un array que rastrea el viaje emocional del capítulo, identificando la emoción clave de hasta 5 partes significativas.\n\nCapítulo:\n"${chapterContent}"`;
     const critiqueSchema = {
         type: Type.OBJECT,
         properties: {
@@ -419,9 +426,21 @@ export const critiqueChapter = async (chapterContent: string): Promise<any> => {
             dialogue: { type: Type.OBJECT, properties: { score: Type.INTEGER, comment: Type.STRING, suggestion: Type.STRING }, required: ["score", "comment", "suggestion"] },
             description: { type: Type.OBJECT, properties: { score: Type.INTEGER, comment: Type.STRING, suggestion: Type.STRING }, required: ["score", "comment", "suggestion"] },
             consistency: { type: Type.OBJECT, properties: { score: Type.INTEGER, comment: Type.STRING, suggestion: Type.STRING }, required: ["score", "comment", "suggestion"] },
-            overall: { type: Type.STRING, description: "Un resumen general de la crítica." }
+            overall: { type: Type.STRING, description: "Un resumen general de la crítica." },
+            emotionalArc: {
+                type: Type.ARRAY,
+                description: "El arco emocional del capítulo.",
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        part: { type: Type.STRING, description: "Una breve descripción de la parte del capítulo." },
+                        emotion: { type: Type.STRING, description: "La emoción dominante (ej: Alegría, Tensión, Tristeza, Alivio)." }
+                    },
+                    required: ["part", "emotion"]
+                }
+            }
         },
-        required: ["pacing", "dialogue", "description", "consistency", "overall"]
+        required: ["pacing", "dialogue", "description", "consistency", "overall", "emotionalArc"]
     };
     try {
         const response = await ai.models.generateContent({

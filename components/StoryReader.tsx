@@ -177,17 +177,18 @@ const bionicReadingTransform = (html: string): string => {
     return tempDiv.innerHTML;
 };
 
-const MiniHud: React.FC<{ onTogglePanel: (panel: 'notes' | 'glossary') => void }> = ({ onTogglePanel }) => (
+const MiniHud: React.FC<{ onTogglePanel: (panel: 'notes' | 'glossary' | 'map') => void, showMapButton: boolean }> = ({ onTogglePanel, showMapButton }) => (
     <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 bg-surface/80 backdrop-blur-md rounded-full p-2 flex flex-col gap-3 border border-border-color shadow-lg">
         <button onClick={() => onTogglePanel('notes')} className="p-2 hover:text-primary rounded-full transition-colors" title="Notas"><Icon name="message-square" className="w-5 h-5"/></button>
         <button className="p-2 hover:text-primary rounded-full transition-colors" title="Marcadores"><Icon name="tag" className="w-5 h-5"/></button>
         <button onClick={() => onTogglePanel('glossary')} className="p-2 hover:text-primary rounded-full transition-colors" title="Glosario"><Icon name="book-text" className="w-5 h-5"/></button>
+        {showMapButton && <button onClick={() => onTogglePanel('map')} className="p-2 hover:text-primary rounded-full transition-colors" title="Mapa de Trama"><Icon name="share-2" className="w-5 h-5"/></button>}
     </div>
 );
 
-const SidePanel: React.FC<{title: string; icon: IconProps['name']; onClose: () => void; children: React.ReactNode}> = ({title, icon, onClose, children}) => (
+const SidePanel: React.FC<{title: string; icon: IconProps['name']; onClose: () => void; children: React.ReactNode; wide?: boolean}> = ({title, icon, onClose, children, wide = false}) => (
      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex justify-end animate-palette-enter" onClick={onClose}>
-         <div className="w-full max-w-md h-full bg-surface p-6 overflow-y-auto shadow-2xl animate-slide-in-right" onClick={e => e.stopPropagation()}>
+         <div className={`w-full ${wide ? 'max-w-3xl' : 'max-w-md'} h-full bg-surface p-6 overflow-y-auto shadow-2xl animate-slide-in-right`} onClick={e => e.stopPropagation()}>
              <div className="flex justify-between items-center mb-4 pb-4 border-b border-border-color">
                  <h3 className="text-xl font-bold text-primary flex items-center gap-2"><Icon name={icon} className="w-6 h-6"/>{title}</h3>
                  <button onClick={onClose} className="p-1 rounded-full hover:bg-surface-light"><Icon name="x-circle" className="w-6 h-6" /></button>
@@ -197,6 +198,84 @@ const SidePanel: React.FC<{title: string; icon: IconProps['name']; onClose: () =
      </div>
 );
 
+const StoryMapView: React.FC<{ story: Story }> = ({ story }) => {
+    const { chapters, chapterHistory, id: storyId } = story;
+    const currentChapterId = chapterHistory[chapterHistory.length - 1];
+
+    const nodes = useMemo(() => {
+        const chapterMap = new Map(chapters.map(c => [c.id, c]));
+        const nodeMap = new Map(chapters.map(c => [c.id, { ...c, children: [], level: -1 }]));
+        
+        chapters.forEach(c => {
+            if (c.options) {
+                c.options.forEach(opt => {
+                    const parentNode = nodeMap.get(c.id);
+                    if (parentNode) {
+                        parentNode.children.push(opt.nextChapterId);
+                    }
+                });
+            }
+        });
+
+        const entryPoint = chapterHistory[0];
+        const visited = new Set<string>();
+        const queue: { id: string; level: number }[] = [{ id: entryPoint, level: 0 }];
+        visited.add(entryPoint);
+
+        while (queue.length > 0) {
+            const { id, level } = queue.shift()!;
+            const node = nodeMap.get(id);
+            if (node) {
+                node.level = level;
+                node.children.forEach(childId => {
+                    if (!visited.has(childId)) {
+                        visited.add(childId);
+                        queue.push({ id: childId, level: level + 1 });
+                    }
+                });
+            }
+        }
+
+        const levels: { [level: number]: any[] } = {};
+        nodeMap.forEach(node => {
+            if (node.level !== -1) {
+                if (!levels[node.level]) levels[node.level] = [];
+                levels[node.level].push(node);
+            }
+        });
+
+        return { nodeMap, levels };
+    }, [chapters, chapterHistory]);
+
+    return (
+        <div className="flex space-x-8 p-4 overflow-x-auto">
+            {Object.keys(nodes.levels).sort((a,b) => Number(a)-Number(b)).map(level => (
+                <div key={level} className="flex flex-col items-center space-y-8 flex-shrink-0">
+                    <h4 className="font-bold text-text-secondary">Nivel {parseInt(level) + 1}</h4>
+                    {nodes.levels[Number(level)].map(node => {
+                         const isCurrent = node.id === currentChapterId;
+                         const isInHistory = chapterHistory.includes(node.id);
+                         const isFuture = !isInHistory;
+                         
+                         const nodeClasses = `w-48 p-3 rounded-lg border-2 text-center text-sm shadow-md transition-all
+                            ${isCurrent ? 'bg-primary/30 border-primary shadow-primary/20 scale-110' : ''}
+                            ${isInHistory && !isCurrent ? 'bg-surface-light border-border-color' : ''}
+                            ${isFuture ? 'bg-brand-bg border-dashed border-border-color opacity-70' : ''}
+                         `;
+
+                        return (
+                            <div key={node.id} className={nodeClasses}>
+                                <p className="font-bold truncate">{node.title}</p>
+                                <p className="text-xs text-text-secondary truncate">{node.microSummary}</p>
+                            </div>
+                        )
+                    })}
+                </div>
+            ))}
+        </div>
+    );
+};
+
 
 export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdateStory, readerDefaults, onReaderDefaultsChange, effectiveTier, onUpdateLastRead, onCritiqueChapter, isKidsMode }) => {
   const [currentChapterId, setCurrentChapterId] = useState(story.chapterHistory[story.chapterHistory.length - 1]);
@@ -204,7 +283,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
   const [editedContent, setEditedContent] = useState('');
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [activePanel, setActivePanel] = useState<'critique' | 'notes' | 'glossary' | null>(null);
+  const [activePanel, setActivePanel] = useState<'critique' | 'notes' | 'glossary' | 'map' | null>(null);
   const [showBreakModal, setShowBreakModal] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -449,10 +528,19 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
       if (!critique) return <p className="text-text-secondary">No hay análisis para este capítulo. Haz clic en el botón "Doctor IA" para generar uno.</p>;
       
       const categoryOrder = ['pacing', 'dialogue', 'description', 'consistency'];
+      
+      const getEmotionColor = (emotion: string) => {
+        const lowerEmotion = emotion.toLowerCase();
+        if (lowerEmotion.includes('alegría') || lowerEmotion.includes('esperanza') || lowerEmotion.includes('alivio')) return 'text-green-400';
+        if (lowerEmotion.includes('tensión') || lowerEmotion.includes('miedo') || lowerEmotion.includes('ira')) return 'text-red-400';
+        if (lowerEmotion.includes('tristeza') || lowerEmotion.includes('melancolía')) return 'text-blue-400';
+        if (lowerEmotion.includes('sorpresa') || lowerEmotion.includes('confusión')) return 'text-yellow-400';
+        return 'text-purple-400';
+      };
 
       return (
           <div className="space-y-4">
-              <p className="italic text-text-secondary">{critique.overall.comment || "Análisis general del capítulo."}</p>
+              <p className="italic text-text-secondary">{(critique as any).overall || "Análisis general del capítulo."}</p>
               {categoryOrder.map(catKey => {
                   const catData = critique[catKey];
                   if (!catData) return null;
@@ -461,10 +549,23 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
                       <div key={catKey}>
                           <h4 className="font-semibold text-text-main capitalize flex justify-between items-center">{catKey} <span className={`font-bold text-lg ${scoreColor}`}>{catData.score}/10</span></h4>
                           <p className="text-sm text-text-secondary">{catData.comment}</p>
-                          <p className="text-sm text-primary-hover mt-1 pl-2 border-l-2 border-primary"><b>Sugerencia:</b> {catData.suggestion}</p>
+                          {catData.suggestion && <p className="text-sm text-primary-hover mt-1 pl-2 border-l-2 border-primary"><b>Sugerencia:</b> {catData.suggestion}</p>}
                       </div>
                   )
               })}
+              {critique.emotionalArc && critique.emotionalArc.length > 0 && (
+                <div>
+                    <h4 className="font-semibold text-text-main capitalize flex justify-between items-center mt-4">Arco Emocional</h4>
+                    <div className="flex flex-col gap-2 mt-2">
+                        {critique.emotionalArc.map((arc, i) => (
+                            <div key={i} className="p-2 bg-surface-light rounded-md text-sm">
+                                <span className={`font-bold mr-2 ${getEmotionColor(arc.emotion)}`}>{arc.emotion}:</span>
+                                <span className="text-text-secondary">{arc.part}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+              )}
           </div>
       );
   }
@@ -511,6 +612,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
         let title = '';
         let icon: IconProps['name'] = 'info';
         let content: React.ReactNode = null;
+        let wide = false;
 
         switch(activePanel) {
             case 'critique':
@@ -528,9 +630,15 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
                 icon = 'book-text';
                 content = renderGlossaryPanel();
                 break;
+            case 'map':
+                title = "Mapa de Trama";
+                icon = 'share-2';
+                content = <StoryMapView story={story} />;
+                wide = true;
+                break;
         }
 
-        return <SidePanel title={title} icon={icon} onClose={() => setActivePanel(null)}>{content}</SidePanel>;
+        return <SidePanel title={title} icon={icon} onClose={() => setActivePanel(null)} children={content} wide={wide} />;
     }
 
 
@@ -546,7 +654,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
             </div>
         </div>
       )}
-      {readerDefaults.showMiniHud && !isFocusMode && <MiniHud onTogglePanel={setActivePanel} />}
+      {readerDefaults.showMiniHud && !isFocusMode && <MiniHud onTogglePanel={setActivePanel} showMapButton={!!story.isBranching} />}
       <div className="max-w-4xl mx-auto px-4 py-8 min-h-screen">
        {!isFocusMode && (
         <div className="flex justify-between items-center mb-8">
@@ -559,6 +667,11 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
             </button>
             <div className="flex items-center gap-2">
                 <TTSControls chapterText={currentChapter.title + '.\n' + currentChapter.content} isEnabled={true} />
+                {story.isBranching && (
+                    <button onClick={() => setActivePanel('map')} className="p-2 rounded-full hover:bg-surface-light transition-colors" title="Mapa de Trama">
+                        <Icon name="share-2" className="w-5 h-5" />
+                    </button>
+                )}
                  <div className="relative">
                     <button onClick={() => { onCritiqueChapter(currentChapter.id); setActivePanel('critique'); }} className="p-2 rounded-full hover:bg-surface-light transition-colors relative disabled:opacity-50 disabled:cursor-not-allowed" title="Doctor IA" disabled={!isProOrHigher}>
                         <Icon name="brain-circuit" className="w-5 h-5" />

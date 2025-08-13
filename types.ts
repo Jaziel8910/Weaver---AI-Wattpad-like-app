@@ -20,7 +20,7 @@ export interface Chapter {
   illustrationUrl?: string;
   illustrationPrompt?: string;
   options?: ChapterOption[]; // For branching narratives
-  critique?: Record<string, { score: number; comment: string; suggestion?: string }>; // For Doctor IA
+  critique?: Record<string, { score: number; comment: string; suggestion?: string }> & { emotionalArc?: { part: string; emotion: string; }[] }; // For Doctor IA
   emotionTags?: string[]; // For dynamic backgrounds, e.g., 'suspense', 'romance', 'action'
   microSummary: string; // For chapter lists in preview
   notes?: Note[];
@@ -165,6 +165,7 @@ export interface GenerationParams {
   weaverAgeRating?: WeaverAgeRating;
   explicitContent?: ExplicitContentFlags;
   universeId?: string;
+  crossoverUniverseIds?: string[]; // Pro/Ultra feature
 }
 
 export interface GenerationPreset extends GenerationParams {
@@ -256,6 +257,13 @@ export interface Quests {
     firstPresetSaved: boolean;
 }
 
+export interface ActivityLogEntry {
+    storyId: string;
+    storyTitle: string;
+    chaptersRead: number;
+    date: string; // YYYY-MM-DD
+}
+
 // User profile and preferences collected during onboarding
 export interface AccountSettings {
     userId: string; // Unique, persistent ID for the user
@@ -292,7 +300,7 @@ export interface AccountSettings {
     writerRank?: WriterRank;
     rankPoints?: number;
     dailyQuests?: DailyQuest[];
-    parentalControls?: { pin: string; contentFilters: WeaverAgeRating[]; timeLimits: any; } | null;
+    parentalControls?: { pin: string; contentFilters: WeaverAgeRating[]; timeLimits: any; activityLog?: ActivityLogEntry[] } | null;
     // Passkey for passwordless login alpha
     passkeyCredentialId?: string; // base64url encoded
     passkeyPublicKey?: JsonWebKey;

@@ -104,6 +104,14 @@ export const encryptForFile = async (data: SweFileBundle, password: string): Pro
 };
 
 /**
+ * Encrypts the account data and returns a base64 string for sync.
+ */
+export const encryptForSync = async (data: SweFileBundle, password: string): Promise<string> => {
+    const buffer = await encryptForFile(data, password);
+    return arrayBufferToBase64(buffer);
+};
+
+/**
  * Decrypts a .swe file buffer.
  */
 export const decryptFromFile = async (fileBuffer: ArrayBuffer, password: string): Promise<SweFileBundle> => {

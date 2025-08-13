@@ -1,7 +1,6 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
-import type { AppSettings, WritingStyle, AILanguage, Language, StartupView, UserTier, Genre, PointOfView, ImageQuality, AvatarFrame, AccountSettings, Story, WeaverAgeRating } from '../types';
+import type { AppSettings, WritingStyle, AILanguage, Language, StartupView, UserTier, Genre, PointOfView, ImageQuality, AvatarFrame, AccountSettings, Story, WeaverAgeRating, ActivityLogEntry, Complexity } from '../types';
 import { Icon, type IconProps } from './Icon';
 import { ProBadge } from './ProBadge';
 import { createPasskey } from '../services/cryptoService';
@@ -16,6 +15,7 @@ interface SettingsProps {
   onPurchaseTier: (tier: UserTier, durationHours: number, cost: number) => void;
   tierPrices: Record<UserTier, Record<string, number>>;
   onRefundLastPurchase: () => void;
+  onGetSyncData: () => Promise<string>;
 }
 
 type Category = 'plans' | 'creation_prefs' | 'parental' | 'security' | 'general' | 'ai' | 'reader' | 'accessibility' | 'privacy' | 'keybindings' | 'storage' | 'connection' | 'about';
@@ -69,11 +69,68 @@ const languages: Language[] = ['Español', 'English', 'Français', 'Deutsch'];
 const aiLanguages: AILanguage[] = ['Español', 'English'];
 const startupViews: StartupView[] = ['Biblioteca', 'Última Historia Leída', 'Crear Nueva Historia'];
 
-export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, onUpdateAccountSettings, onBack, effectiveTier, onPurchaseTier, tierPrices, onRefundLastPurchase }) => {
+const SyncModal: React.FC<{ onClose: () => void; onGetSyncData: () => Promise<string>; }> = ({ onClose, onGetSyncData }) => {
+    const [isLoading, setIsLoading] = useState(false);
+    const [syncData, setSyncData] = useState('');
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleGenerateData = async () => {
+        setIsLoading(true);
+        setSyncData('');
+        try {
+            const data = await onGetSyncData();
+            setSyncData(data);
+        } catch (error) {
+            console.error(error);
+            alert((error as Error).message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleCopyToClipboard = () => {
+        navigator.clipboard.writeText(syncData).then(() => {
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+        });
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+            <div className="bg-surface rounded-lg shadow-xl p-6 w-full max-w-lg animate-palette-enter">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-primary flex items-center gap-2"><Icon name="wifi" /> Sincronización de Bóveda</h3>
+                    <button onClick={onClose}><Icon name="x-circle" className="w-6 h-6 text-text-secondary hover:text-text-main"/></button>
+                </div>
+                {!syncData ? (
+                    <div className="text-center py-8">
+                        <p className="text-text-secondary mb-4">Genera un código de texto para transferir toda tu bóveda a otro dispositivo.</p>
+                        <button onClick={handleGenerateData} disabled={isLoading} className="px-5 py-2.5 bg-primary text-white font-semibold rounded-md hover:bg-primary-hover disabled:opacity-50 flex items-center gap-2 mx-auto">
+                            {isLoading ? <><Icon name="loader" className="animate-spin" /> Generando...</> : 'Generar Datos para Sincronizar'}
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <p className="text-sm text-text-secondary">Copia este bloque de texto y pégalo en la pestaña "Sincronizar" en la pantalla de inicio de Weaver en tu otro dispositivo.</p>
+                        <textarea value={syncData} readOnly className="w-full h-40 bg-brand-bg border border-border-color rounded-md p-2 text-xs font-mono select-all" />
+                        <button onClick={handleCopyToClipboard} className="w-full px-5 py-2.5 bg-primary text-white font-semibold rounded-md hover:bg-primary-hover flex items-center justify-center gap-2">
+                            <Icon name={isCopied ? "check" : "copy"} />
+                            {isCopied ? '¡Copiado!' : 'Copiar al Portapapeles'}
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, onUpdateAccountSettings, onBack, effectiveTier, onPurchaseTier, tierPrices, onRefundLastPurchase, onGetSyncData }) => {
     const isKidsMode = settings.general.uiMode === 'kids';
-    const [activeCategory, setActiveCategory] = useState<Category>(isKidsMode ? 'general' : 'plans');
+    const [activeCategory, setActiveCategory] = useState<Category>(isKidsMode ? 'parental' : 'plans');
     const [editingKey, setEditingKey] = useState<keyof AppSettings['keybindings'] | null>(null);
     const [aboutSubView, setAboutSubView] = useState<'main' | 'tos' | 'privacy' | 'changelog'>('main');
+    const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
     const isEssentialsOrHigher = effectiveTier !== 'free';
     const isProOrHigher = effectiveTier === 'pro' || effectiveTier === 'ultra';
@@ -85,7 +142,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
         if (!isEssentialsOrHigher && settings.social.profileVisibility !== 'Privado') {
             handleUpdate('social', 'profileVisibility', 'Privado');
         }
-    }, [effectiveTier, settings.social.profileVisibility, onUpdateSettings]);
+    }, [effectiveTier, settings.social.profileVisibility]);
 
     const handleUpdate = <T extends keyof AppSettings, K extends keyof AppSettings[T]>(category: T, key: K, value: AppSettings[T][K]) => {
         onUpdateSettings({ [category]: { ...settings[category], [key]: value } });
@@ -133,7 +190,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
     const handleKidsModeToggle = (wantsToEnable: boolean) => {
         if (wantsToEnable) {
             handleUpdate('general', 'uiMode', 'kids');
-            setActiveCategory('general'); // Switch to a safe category
+            setActiveCategory('parental'); // Switch to parental controls
         } else {
             // Turning it off
             if (settings.account.parentalControls?.pin) {
@@ -293,7 +350,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                                 onChange={e => {
                                     const newPin = e.target.value.replace(/\D/g, ''); // only digits
                                     if (newPin.length <= 8) {
-                                        onUpdateAccountSettings({ parentalControls: { ...(settings.account.parentalControls || { pin: '', contentFilters: [], timeLimits: {} }), pin: newPin } })
+                                        onUpdateAccountSettings({ parentalControls: { ...(settings.account.parentalControls || { pin: '', contentFilters: [], timeLimits: {}, activityLog: [] }), pin: newPin } })
                                     }
                                 }}
                                 placeholder="4-8 dígitos"
@@ -319,8 +376,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                         </SettingControl>
                     </SettingRow>
                     <div className="mt-6">
-                        <h4 className="font-semibold text-text-main">Actividad de Lectura (Próximamente)</h4>
-                        <p className="text-sm text-text-secondary mt-2 p-4 bg-surface-light rounded-md border border-dashed border-border-color text-center">Aquí verás el tiempo de lectura y las historias leídas por tu hijo/a.</p>
+                        <h4 className="font-semibold text-text-main">Resumen de Actividad de Lectura</h4>
+                        {(settings.account.parentalControls?.activityLog && settings.account.parentalControls.activityLog.length > 0) ? (
+                            <ul className="space-y-2 mt-2 max-h-60 overflow-y-auto bg-brand-bg p-2 rounded-md">
+                                {settings.account.parentalControls.activityLog.slice().reverse().map((log: ActivityLogEntry, i: number) => (
+                                    <li key={i} className="p-3 bg-surface rounded-md flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-text-main">{log.storyTitle}</p>
+                                            <p className="text-xs text-text-secondary">Leído el {new Date(log.date).toLocaleDateString()}</p>
+                                        </div>
+                                        <p className="font-bold text-primary">{log.chaptersRead} caps.</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-sm text-text-secondary mt-2 p-4 bg-surface-light rounded-md border border-dashed border-border-color text-center">
+                                Aún no hay actividad de lectura registrada.
+                            </p>
+                        )}
                     </div>
                 </div>
             );
@@ -576,215 +649,115 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                         <SettingLabel title="Tono de TTS" description="Ajusta el tono de la voz de lectura." />
                         <SettingControl isLocked={!isEssentialsOrHigher} tierRequired="essentials">
                              <div className="w-full sm:w-60 flex items-center gap-3">
-                                <input type="range" min="0.5" max="2" step="0.1" value={settings.accessibility.ttsPitch} onChange={e => handleUpdate('accessibility', 'ttsPitch', parseFloat(e.target.value))} className="w-full h-2 bg-border-color rounded-lg appearance-none cursor-pointer accent-primary" disabled={!isEssentialsOrHigher} />
-                                <span className="text-sm font-mono">{settings.accessibility.ttsPitch.toFixed(1)}</span>
+                                <input type="range" min="0.5" max="2" step="0.1" value={settings.accessibility.ttsPitch} onChange={e => handleUpdate('accessibility', 'ttsPitch', parseFloat(e.target.value))} className="w-full h-2 bg-border-color rounded-lg appearance-none cursor-pointer accent-primary" disabled={!isEssentialsOrHigher}/>
+                                <span className="text-sm font-mono">{settings.accessibility.ttsPitch.toFixed(1)}x</span>
                             </div>
                         </SettingControl>
                     </SettingRow>
                 </div>
             );
-            case 'privacy': return (
-                <div className="p-4">
-                     <SettingRow>
-                        <SettingLabel title="Consentimiento de Datos" description="Requerido para guardar datos de la cuenta en el navegador." />
-                        <SettingControl><Toggle checked={settings.privacy.dataProcessingConsent} onChange={v => handleUpdate('privacy', 'dataProcessingConsent', v)}/></SettingControl>
-                    </SettingRow>
-                    <SettingRow>
-                        <SettingLabel title="Compartir Datos Analíticos" description="Ayúdanos a mejorar la app compartiendo datos de uso anónimos." />
-                        <SettingControl><Toggle checked={settings.privacy.shareAnalytics} onChange={v => handleUpdate('privacy', 'shareAnalytics', v)}/></SettingControl>
-                    </SettingRow>
-                     <SettingRow>
-                        <SettingLabel title="Programa Beta de Weaver" description="Participa para probar nuevas funcionalidades antes que nadie y ayúdanos a mejorar la app." />
-                        <SettingControl><Toggle checked={!!settings.privacy.betaTester} onChange={v => handleUpdate('privacy', 'betaTester', v)}/></SettingControl>
-                    </SettingRow>
-                     <SettingRow>
-                        <SettingLabel title="Exportar mis Datos" description="Descarga un archivo con todos los datos de tu cuenta." />
-                        <SettingControl><button type="button" className="flex items-center text-sm px-3 py-1.5 bg-surface border border-border-color rounded-md hover:bg-primary-hover hover:text-white transition-colors"> <Icon name="download" className="w-4 h-4 mr-1.5"/> Solicitar Exportación</button></SettingControl>
-                    </SettingRow>
-                     <SettingRow>
-                        <SettingLabel title="Eliminar Cuenta" description="Elimina permanentemente tu cuenta y todos tus datos. ¡Esta acción es irreversible!" />
-                        <SettingControl><button type="button" className="px-3 py-1.5 text-sm bg-red-600/20 text-red-400 border border-red-500/30 rounded-md hover:bg-red-500 hover:text-white transition-colors"> <Icon name="trash" className="w-4 h-4 mr-1.5 inline"/> Eliminar Cuenta</button></SettingControl>
-                    </SettingRow>
-                </div>
-            );
-             case 'keybindings': 
+            case 'privacy':
                 return (
-                    <div className="p-4" onKeyDown={handleKeyDown} onBlur={() => setEditingKey(null)}>
-                        {!isProOrHigher && (
-                             <div className="p-6 text-center flex flex-col items-center justify-center h-full">
-                                <Icon name="keyboard" className="w-12 h-12 text-primary mb-4" />
-                                <h3 className="text-xl font-bold text-text-main">Atajos de Teclado Personalizados</h3>
-                                <p className="text-text-secondary mt-2 mb-4">Optimiza tu flujo de trabajo configurando tus propios atajos.</p>
-                                <ProBadge tierName='PRO' isLocked />
-                            </div>
-                        )}
-                        {isProOrHigher && Object.keys(settings.keybindings).map(key => (
-                             <SettingRow key={key}>
-                                <SettingLabel title={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} description={`Atajo para ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`}/>
+                    <div className="p-4">
+                        <SettingRow>
+                            <SettingLabel title="Consentimiento de Datos" description="Permitir que Weaver procese tus datos para proporcionar el servicio." />
+                            <SettingControl><Toggle checked={settings.privacy.dataProcessingConsent} onChange={v => handleUpdate('privacy', 'dataProcessingConsent', v)} /></SettingControl>
+                        </SettingRow>
+                        <SettingRow>
+                            <SettingLabel title="Compartir Analíticas" description="Ayuda a mejorar Weaver compartiendo datos de uso anónimos." />
+                            <SettingControl><Toggle checked={settings.privacy.shareAnalytics} onChange={v => handleUpdate('privacy', 'shareAnalytics', v)} /></SettingControl>
+                        </SettingRow>
+                    </div>
+                );
+            case 'keybindings':
+                return (
+                    <div className="p-4">
+                        {Object.keys(settings.keybindings).map(key => (
+                            <SettingRow key={key}>
+                                <SettingLabel title={key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} description={`Atajo para ${key.replace(/([A-Z])/g, ' $1').toLowerCase()}`} />
                                 <SettingControl>
-                                    <button type="button" onClick={() => setEditingKey(key as keyof AppSettings['keybindings'])} className="w-full sm:w-48 text-center bg-brand-bg border border-border-color rounded-md py-1.5 px-2 text-sm font-mono uppercase hover:border-primary">
-                                        {editingKey === key ? 'Pulsar tecla...' : settings.keybindings[key as keyof AppSettings['keybindings']]}
-                                    </button>
+                                    <input
+                                        type="text"
+                                        value={settings.keybindings[key as keyof AppSettings['keybindings']]}
+                                        onKeyDown={handleKeyDown}
+                                        onFocus={() => setEditingKey(key as keyof AppSettings['keybindings'])}
+                                        onBlur={() => setEditingKey(null)}
+                                        readOnly
+                                        className="w-40 text-center bg-brand-bg border border-border-color rounded-md py-1.5 px-2 text-sm"
+                                        placeholder="Presiona una tecla..."
+                                    />
                                 </SettingControl>
                             </SettingRow>
                         ))}
-                         {editingKey && <p className="text-center text-sm text-primary mt-4">Pulsando una combinación de teclas... Haz clic fuera para cancelar.</p>}
-                    </div>
-                 );
-            case 'storage': return (
-                <div className="p-4">
-                    <SettingRow>
-                        <SettingLabel title="Autoguardado Local" description="Guarda automáticamente tu progreso en el navegador." />
-                        <SettingControl><Toggle checked={settings.storage.autoSaveEnabled} onChange={v => handleUpdate('storage', 'autoSaveEnabled', v)}/></SettingControl>
-                    </SettingRow>
-                    <SettingRow>
-                        <SettingLabel title="Intervalo de Autoguardado" description="Frecuencia con la que se guarda tu progreso." />
-                        <SettingControl>
-                            <select value={settings.storage.autoSaveInterval} onChange={e => handleUpdate('storage', 'autoSaveInterval', parseInt(e.target.value))} className="w-full sm:w-60 bg-brand-bg border border-border-color rounded-md py-1.5 px-2 text-sm">
-                                <option value="30">Cada 30 segundos</option>
-                                <option value="60">Cada minuto</option>
-                                <option value="300">Cada 5 minutos</option>
-                            </select>
-                        </SettingControl>
-                    </SettingRow>
-                    <SettingRow>
-                        <SettingLabel title="Tamaño Máximo de Caché" description="Límite de espacio para imágenes y datos en caché." />
-                        <SettingControl isLocked={!isEssentialsOrHigher} tierRequired="essentials">
-                             <div className="w-full sm:w-60 flex items-center gap-3">
-                                <input type="range" min="100" max="2000" step="100" value={settings.storage.maxCacheSizeMB} onChange={e => handleUpdate('storage', 'maxCacheSizeMB', parseInt(e.target.value))} className="w-full h-2 bg-border-color rounded-lg appearance-none cursor-pointer accent-primary" disabled={!isEssentialsOrHigher} />
-                                <span className="text-sm font-mono">{settings.storage.maxCacheSizeMB} MB</span>
-                            </div>
-                        </SettingControl>
-                    </SettingRow>
-                    <SettingRow>
-                        <SettingLabel title="Limpiar Caché Automáticamente" description="Borra archivos antiguos de la caché cuando se alcanza el límite." />
-                        <SettingControl isLocked={!isEssentialsOrHigher} tierRequired="essentials">
-                            <Toggle checked={settings.storage.autoClearCache} onChange={v => handleUpdate('storage', 'autoClearCache', v)} disabled={!isEssentialsOrHigher}/>
-                        </SettingControl>
-                    </SettingRow>
-                    <SettingRow>
-                        <SettingLabel title="Limpiar caché ahora" description="Elimina las imágenes generadas y en caché para liberar espacio." />
-                        <SettingControl><button type="button" onClick={() => alert('Caché limpiada.')} className="px-3 py-1.5 text-sm bg-surface border border-border-color rounded-md hover:bg-primary-hover hover:text-white transition-colors">Limpiar</button></SettingControl>
-                    </SettingRow>
-                      <SettingRow>
-                        <SettingLabel title="Eliminar todas las historias" description="¡Acción irreversible! Borra permanentemente todas las historias de tu biblioteca." />
-                        <SettingControl><button type="button" onClick={() => confirm('¿Estás seguro? Esta acción es irreversible y solo afecta a este dispositivo.') && alert('Biblioteca eliminada.')} className="px-3 py-1.5 text-sm bg-red-600/20 text-red-400 border border-red-500/30 rounded-md hover:bg-red-500 hover:text-white transition-colors">Eliminar Todo</button></SettingControl>
-                    </SettingRow>
-                </div>
-            );
-            case 'connection': return (
-                 <div className="p-4">
-                    <SettingRow>
-                        <SettingLabel title="Descargar imágenes solo con Wi-Fi" description="Ahorra datos móviles al evitar la descarga de ilustraciones en redes celulares." />
-                        <SettingControl><Toggle checked={settings.connection.downloadIllustrationsOnWifiOnly} onChange={v => handleUpdate('connection', 'downloadIllustrationsOnWifiOnly', v)}/></SettingControl>
-                    </SettingRow>
-                     <SettingRow>
-                        <SettingLabel title="Sincronizar solo con Wi-Fi" description="Sincroniza tu cuenta con el (futuro) cloud solo en redes Wi-Fi." />
-                        <SettingControl><Toggle checked={settings.connection.syncOnWifiOnly} onChange={v => handleUpdate('connection', 'syncOnWifiOnly', v)}/></SettingControl>
-                    </SettingRow>
-                     <SettingRow>
-                        <SettingLabel title="Modo Ahorro de Datos" description="Reduce la calidad de las imágenes y la precarga para consumir menos datos." />
-                        <SettingControl><Toggle checked={settings.connection.dataSaverMode} onChange={v => handleUpdate('connection', 'dataSaverMode', v)}/></SettingControl>
-                    </SettingRow>
-                 </div>
-            );
-            case 'about':
-                const AboutPageWrapper: React.FC<{title: string, onBack: () => void, children: React.ReactNode}> = ({title, onBack, children}) => (
-                    <div className="p-6">
-                         <button onClick={onBack} className="flex items-center text-sm text-primary hover:text-primary-hover mb-4">
-                            <Icon name="arrow-left" className="w-4 h-4 mr-2"/>
-                            Volver a 'Acerca de'
-                        </button>
-                        <div className="prose prose-invert max-w-none prose-h2:text-primary prose-h2:font-bold">
-                            <h2>{title}</h2>
-                            {children}
-                        </div>
                     </div>
                 );
-
-                switch(aboutSubView) {
-                    case 'changelog':
-                        return <AboutPageWrapper title="Notas de la Versión" onBack={() => setAboutSubView('main')}>
-                            <h3>v5.0.0 - The "Universe & Experience" Update</h3>
-                            <ul>
-                                <li><strong>NUEVO (PRO):</strong> ¡Presentamos Weaver Universe (Alpha)! Crea mundos, líneas de tiempo y fichas de personajes detalladas para conectar tus historias.</li>
-                                <li><strong>NUEVO:</strong> El modo de lectura ha sido completamente rediseñado con un modo Cine, un mini-HUD lateral y la capacidad de tomar notas.</li>
-                                <li><strong>NUEVO:</strong> La vista previa de la historia ahora es una página completa con portadas animadas, personajes, capítulos y más.</li>
-                                <li><strong>NUEVO:</strong> Sistema de Clasificación de Escritor. Sube de rango de C a S+ para ganar más Weaverins y desbloquear funciones.</li>
-                                <li><strong>NUEVO (Essentials):</strong> Modo Maduro. Activa contenido explícito con una capa de seguridad de PIN.</li>
-                                <li><strong>NUEVO:</strong> Clasificaciones de edad de Weaver (Kids, Teen, Mature, Adult) y modo UI Weaver Kids para una experiencia segura y colorida.</li>
-                                <li><strong>MEJORADO:</strong> ¡El Fandom Hub, la economía de Weaverins y el sistema de misiones están aquí! (UI inicial).</li>
-                                <li><strong>ACTUALIZADO:</strong> La estructura de datos interna se ha ampliado masivamente para dar cabida a todas estas nuevas y emocionantes características.</li>
-                            </ul>
-                        </AboutPageWrapper>
-                    case 'tos':
-                         return <AboutPageWrapper title="Términos de Servicio" onBack={() => setAboutSubView('main')}>
-                           <ol>
-                                <li><strong>Aceptación de los Términos:</strong> Al usar Weaver, aceptas que tus historias puedan ser tan épicas que causen que tus amigos te miren con envidia. No nos hacemos responsables de amistades rotas por celos literarios.</li>
-                                <li><strong>Uso Aceptable:</strong> No puedes usar la IA para escribir excusas para no ir a trabajar. Bueno, puedes, pero si te despiden, es cosa tuya. La IA no es tu cómplice legal.</li>
-                                <li><strong>Propiedad Intelectual:</strong> Tus creaciones son tuyas. Sin embargo, si generas una historia sobre un pato detective que se convierte en un éxito de ventas mundial, nos debes una pizza. Con piña. Sí, somos de esos.</li>
-                                <li><strong>Cláusula Secreta del Lector Atento:</strong> Si has leído hasta aquí, felicidades. Eres del 0.01%. Como recompensa, tienes permiso para culpar a un gremlin de cualquier error de tipeo en tus historias. Su nombre es "Typo".</li>
-                            </ol>
-                        </AboutPageWrapper>
-                    case 'privacy':
-                        return <AboutPageWrapper title="Política de Privacidad" onBack={() => setAboutSubView('main')}>
-                            <ul>
-                                <li><strong>Qué Recopilamos:</strong> Tus parámetros de generación, para que la IA sepa qué escribir. No recopilamos tus sueños, miedos existenciales o esa vez que le pusiste ketchup a una paella. Eso queda entre tú y tu conciencia.</li>
-                                <li><strong>Cómo Usamos Tus Datos:</strong> Para hacer que la app funcione. No vendemos tus datos a corporaciones malvadas ni a lagartos espaciales que buscan conquistar el mundo. A menos que ofrezcan una cantidad realmente astronómica de Weaverins. (Es broma... ¿o no?).</li>
-                                <li><strong>Seguridad:</strong> Tus datos están encriptados en tu archivo <code>.swe</code>. Es como una bóveda digital. Si olvidas la contraseña, la seguridad es tan buena que ni nosotros podemos entrar. Así que no la pierdas. En serio.</li>
-                            </ul>
-                        </AboutPageWrapper>
-                    default: // 'main'
-                        return (
-                            <div className="p-6 text-center text-text-secondary flex flex-col items-center justify-center h-full">
-                                <Icon name="book-open" className="w-12 h-12 mx-auto text-primary" />
-                                <h2 className="text-2xl font-bold mt-2 text-text-main">Weaver</h2>
-                                <p>Versión 5.0.0 - Universe</p>
-                                <p className="mt-4">Creado con pasión para los amantes de las historias.</p>
-                                <div className="mt-6 flex flex-col sm:flex-row justify-center gap-4">
-                                    <button onClick={() => setAboutSubView('changelog')} className="text-primary hover:underline">Notas de la Versión</button>
-                                    <button onClick={() => setAboutSubView('tos')} className="text-primary hover:underline">Términos de Servicio</button>
-                                    <button onClick={() => setAboutSubView('privacy')} className="text-primary hover:underline">Política de Privacidad</button>
-                                </div>
-                            </div>
-                        );
-                }
+            case 'storage':
+                return (
+                    <div className="p-4">
+                        <SettingRow>
+                            <SettingLabel title="Sincronizar Bóveda" description="Genera un código de texto para mover tu bóveda a otro dispositivo." />
+                            <SettingControl>
+                                <button onClick={() => setIsSyncModalOpen(true)} className="flex items-center text-sm px-3 py-1.5 bg-surface border border-border-color rounded-md hover:bg-primary-hover hover:text-white transition-colors">
+                                    <Icon name="wifi" className="w-4 h-4 mr-1.5" /> Abrir Sincronización
+                                </button>
+                            </SettingControl>
+                        </SettingRow>
+                    </div>
+                );
+            case 'connection':
+                 return (
+                    <div className="p-4">
+                        <SettingRow>
+                            <SettingLabel title="Descargar Ilustraciones Solo con Wi-Fi" description="Ahorra datos móviles." />
+                            <SettingControl><Toggle checked={settings.connection.downloadIllustrationsOnWifiOnly} onChange={v => handleUpdate('connection', 'downloadIllustrationsOnWifiOnly', v)}/></SettingControl>
+                        </SettingRow>
+                        <SettingRow>
+                            <SettingLabel title="Modo Ahorro de Datos" description="Reduce la calidad de las imágenes y otras descargas automáticas." />
+                            <SettingControl><Toggle checked={settings.connection.dataSaverMode} onChange={v => handleUpdate('connection', 'dataSaverMode', v)}/></SettingControl>
+                        </SettingRow>
+                    </div>
+                 );
+            case 'about':
+                return (
+                    <div className="p-4">
+                        <h3 className="text-lg font-bold">Acerca de Weaver</h3>
+                        <p className="text-text-secondary mt-2">Versión de la App: 1.2.0</p>
+                    </div>
+                );
             default: return null;
         }
     };
-
-    const visibleCategories = isKidsMode 
-        ? categories.filter(c => ['parental', 'general', 'reader', 'accessibility', 'about'].includes(c.id))
-        : categories;
-
-
+    
     return (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center">
-                    <button onClick={onBack} className="mr-4 p-2 rounded-full hover:bg-surface-light">
-                        <Icon name="arrow-left" className="w-6 h-6 text-primary" />
-                    </button>
-                    <h1 className="text-3xl font-bold">Ajustes</h1>
-                </div>
+         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div className="flex justify-between items-center mb-8">
+                <button onClick={onBack} className="flex items-center text-sm text-primary hover:text-primary-hover">
+                    <Icon name="arrow-left" className="w-4 h-4 mr-2"/>
+                    Volver
+                </button>
+                <h1 className="text-3xl font-bold text-text-main">Ajustes</h1>
+                <div className="w-16"></div> {/* Spacer */}
             </div>
-
+            {isSyncModalOpen && <SyncModal onClose={() => setIsSyncModalOpen(false)} onGetSyncData={onGetSyncData} />}
             <div className="flex flex-col md:flex-row gap-8">
-                <aside className="w-full md:w-1/4 lg:w-1/5">
-                    <nav className="space-y-1">
-                        {visibleCategories.map(cat => (
+                <aside className="md:w-1/4 lg:w-1/5 shrink-0">
+                    <nav className="space-y-1 sticky top-24">
+                        {categories
+                            .filter(c => !(isKidsMode && !['parental', 'general', 'about', 'accessibility', 'reader'].includes(c.id)))
+                            .filter(c => !(isKidsMode && c.id === 'plans')) // Hide plans in kids mode
+                            .map(cat => (
                             <button
                                 key={cat.id}
                                 onClick={() => setActiveCategory(cat.id)}
-                                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md text-left transition-colors ${activeCategory === cat.id ? 'bg-primary text-white' : 'text-text-secondary hover:bg-surface-light hover:text-text-main'}`}
+                                className={`w-full flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors text-left ${activeCategory === cat.id ? 'bg-primary/20 text-primary' : 'text-text-secondary hover:bg-surface hover:text-text-main'}`}
                             >
-                                <Icon name={cat.icon} className="w-5 h-5 mr-3" />
-                                {cat.name}
+                                <Icon name={cat.icon} className="w-5 h-5 mr-3 shrink-0"/>
+                                <span>{cat.name}</span>
                             </button>
                         ))}
                     </nav>
                 </aside>
-                <main className="w-full md:w-3/4 lg:w-4/5 bg-surface rounded-lg min-h-[60vh] overflow-hidden">
+                <main className="flex-1 bg-surface rounded-lg p-2 sm:p-6 shadow-lg min-h-[60vh]">
                     {renderContent()}
                 </main>
             </div>

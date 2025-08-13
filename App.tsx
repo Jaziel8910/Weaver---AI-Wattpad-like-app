@@ -1,10 +1,11 @@
 
 
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Story, GenerationParams, PilotChapterResponse, SortKey, ReaderFont, ReaderTheme, Chapter, AppSettings, GenerationPreset, SweFileBundle, AccountSettings, UserTier, Friend, ProfileCardData, SecurityQuestion, ReaderDefaultSettings, Universe } from './types';
 import { generatePilotChapter, generateRemainingStory, generateCover, generateIllustration, critiqueChapter, generateStoryMetadata, updateCharacterMemory } from './services/geminiService';
-import { encryptForFile, decryptFromFile, createProfileCard, verifyProfileCard, generateSigningKeyPair, hashText, createPasskey } from './services/cryptoService';
+import { encryptForFile, decryptFromFile, createProfileCard, verifyProfileCard, generateSigningKeyPair, hashText, createPasskey, encryptForSync } from './services/cryptoService';
 import { GenerationForm } from './components/GenerationForm';
 import { StoryCard } from './components/StoryCard';
 import { StoryReader } from './components/StoryReader';
@@ -282,21 +283,20 @@ const App: React.FC = () => {
     const isUltra = effectiveTier === 'ultra';
 
     const handleUpdateSettings = useCallback((updates: Partial<AppSettings>) => {
-        const newSettings = { ...settings, ...updates };
-        setSettings(newSettings);
-        // If account settings changed, update meta
-        if(updates.account) {
-            const newMeta = {
-                username: updates.account.username || settings.account.username,
-                passkeyCredentialId: updates.account.passkeyCredentialId !== undefined ? updates.account.passkeyCredentialId : settings.account.passkeyCredentialId,
-            }
-            setQuickAccessMeta(newMeta);
-            localStorage.setItem('weaver_meta', JSON.stringify(newMeta));
-        }
-    }, [settings]);
-    
+        setSettings(prev => ({ ...prev, ...updates }));
+    }, []);
+
     const handleUpdateAccountSettings = useCallback((updates: Partial<AppSettings['account']>) => {
-        handleUpdateSettings({ account: { ...settings.account, ...updates } });
+        const newAccountSettings = { ...settings.account, ...updates };
+        handleUpdateSettings({ account: newAccountSettings });
+
+        // If account settings changed, update meta
+        const newMeta = {
+            username: newAccountSettings.username,
+            passkeyCredentialId: newAccountSettings.passkeyCredentialId
+        }
+        setQuickAccessMeta(newMeta);
+        localStorage.setItem('weaver_meta', JSON.stringify(newMeta));
     }, [settings.account, handleUpdateSettings]);
     
     const handleUpdateUniverses = useCallback((newUniverses: Universe[]) => {
@@ -474,6 +474,22 @@ const App: React.FC = () => {
         }
     };
 
+    const handleGetSyncData = async (): Promise<string> => {
+        const pw = sessionPassword.current;
+        if (!pw) {
+            throw new Error("Contraseña de sesión no encontrada. No se puede generar la sincronización.");
+        }
+        const bundle: SweFileBundle = {
+            stories,
+            presets,
+            universes,
+            settings,
+            readerSettings: settings.readerDefaults,
+            version: DATA_VERSION
+        };
+        return encryptForSync(bundle, pw);
+    };
+
     const handleCompleteOnboarding = async (onboardingData: any, password: string) => {
         setIsLoading(true);
         setLoadingMessage('Creando tu bóveda segura...');
@@ -606,7 +622,7 @@ const App: React.FC = () => {
             if (isKidsMode) {
                 params.weaverAgeRating = 'Kids';
             }
-            const pilotResponse = await generatePilotChapter(params);
+            const pilotResponse = await generatePilotChapter(params, universes);
             setPilotData({ params, response: pilotResponse });
             setView('reviewing_pilot');
         } catch (err) {
@@ -625,7 +641,7 @@ const App: React.FC = () => {
         const imageQuality = isProOrHigher ? settings.ai.imageQuality : 'Standard';
         try {
             setLoadingMessage('Generando capítulos restantes...');
-            const remainingStoryData = await generateRemainingStory(params, pilotResponse, [pilotResponse.pilotChapter as Chapter], feedback);
+            const remainingStoryData = await generateRemainingStory(params, pilotResponse, [pilotResponse.pilotChapter as Chapter], feedback, undefined, universes);
             setLoadingMessage('Diseñando una portada épica...');
             const coverUrl = await generateCover(pilotResponse.title, pilotResponse.summary, params.genres, imageQuality, params.negativeIllustrationPrompt);
             setLoadingMessage('Analizando la historia...');
@@ -668,35 +684,46 @@ const App: React.FC = () => {
         const oldStory = stories.find(s => s.id === updatedStory.id);
         let storyToUpdate = { ...updatedStory };
 
-        // Check if a new chapter was chosen in a branching narrative
-        if (oldStory && oldStory.chapterHistory.length < storyToUpdate.chapterHistory.length) {
+        // Check if a new chapter was chosen in a branching narrative or for parental controls
+        const isNewChapter = oldStory && oldStory.chapterHistory.length < storyToUpdate.chapterHistory.length;
+
+        if (isNewChapter) {
             const lastChapterId = oldStory.chapterHistory[oldStory.chapterHistory.length - 1];
             const lastChapter = oldStory.chapters.find(c => c.id === lastChapterId);
 
             if (lastChapter) {
+                // Update Character Memory
                 const updatedCharacters = [...storyToUpdate.params.characters]; // Create a mutable copy
-
                 for (let i = 0; i < updatedCharacters.length; i++) {
                     const char = updatedCharacters[i];
-                    // Only update memory for key characters to save API calls
                     if (char.role === 'Protagonista' || char.role === 'Antagonista') { 
                         try {
                             const newMemories = await updateCharacterMemory(char.name, lastChapter.content);
                             if (newMemories.length > 0) {
                                 const currentMemories = char.memoryVector || [];
-                                // Keep last 7 memories to avoid an infinitely growing vector
                                 const combinedMemories = [...currentMemories, ...newMemories];
-                                updatedCharacters[i] = {
-                                    ...char,
-                                    memoryVector: combinedMemories.slice(-7) 
-                                };
+                                updatedCharacters[i] = { ...char, memoryVector: combinedMemories.slice(-7) };
                             }
-                        } catch (e) {
-                            console.error(`Failed to update memory for ${char.name}`, e);
-                        }
+                        } catch (e) { console.error(`Failed to update memory for ${char.name}`, e); }
                     }
                 }
                 storyToUpdate = { ...storyToUpdate, params: { ...storyToUpdate.params, characters: updatedCharacters } };
+            
+                // Update Parental Control Activity Log
+                if (isKidsMode) {
+                    const today = new Date().toISOString().split('T')[0];
+                    const parentalControls = settings.account.parentalControls || { pin: '', contentFilters: [], timeLimits: {}, activityLog: [] };
+                    let activityLog = [...(parentalControls.activityLog || [])];
+                    let todayLogIndex = activityLog.findIndex(log => log.date === today && log.storyId === storyToUpdate.id);
+
+                    if (todayLogIndex > -1) {
+                        activityLog[todayLogIndex] = { ...activityLog[todayLogIndex], chaptersRead: activityLog[todayLogIndex].chaptersRead + 1 };
+                    } else {
+                        activityLog.push({ storyId: storyToUpdate.id, storyTitle: storyToUpdate.title, chaptersRead: 1, date: today });
+                    }
+                    
+                    handleUpdateAccountSettings({ parentalControls: { ...parentalControls, activityLog }});
+                }
             }
         }
 
@@ -886,7 +913,7 @@ const App: React.FC = () => {
             case 'reading': return selectedStory && <StoryReader story={selectedStory} onBack={() => setView('story_preview')} onUpdateStory={handleUpdateStory} readerDefaults={settings.readerDefaults} onReaderDefaultsChange={(newDefaults: ReaderDefaultSettings) => handleUpdateSettings({ readerDefaults: newDefaults })} effectiveTier={effectiveTier} onUpdateLastRead={handleUpdateLastRead} onCritiqueChapter={handleCritiqueChapter} isKidsMode={isKidsMode} />;
             case 'form': return <GenerationForm onGenerate={handleGeneratePilot} isLoading={isLoading} presets={presets} onSavePreset={(p) => setPresets(pr => [...pr, p])} onLoadPreset={(p) => {}} initialInspiration={inspirationPrompt} effectiveTier={effectiveTier} universes={universes} isLegacyMode={isLegacyMode} isKidsMode={isKidsMode} />;
             case 'reviewing_pilot': return pilotData && <ReviewPilot pilotData={pilotData.response} onContinue={handleContinueGeneration} onBack={() => { setView('form'); setPilotData(null); }} isLoading={isLoading} />;
-            case 'settings': return <Settings settings={settings} onUpdateSettings={handleUpdateSettings} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView(settings.general.uiMode === 'kids' ? 'home' : 'profile')} effectiveTier={effectiveTier} onPurchaseTier={handlePurchaseTier} tierPrices={TIER_PRICES} onRefundLastPurchase={handleRefund} />;
+            case 'settings': return <Settings settings={settings} onUpdateSettings={handleUpdateSettings} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView(settings.general.uiMode === 'kids' ? 'home' : 'profile')} effectiveTier={effectiveTier} onPurchaseTier={handlePurchaseTier} tierPrices={TIER_PRICES} onRefundLastPurchase={handleRefund} onGetSyncData={handleGetSyncData} />;
             case 'fandom': return <FandomScreen />;
             case 'universe_hub': return <UniverseHub universes={universes} onUpdateUniverses={handleUpdateUniverses} effectiveTier={effectiveTier} onBack={() => setView('home')} />;
             case 'weaverins_hub': return <WeaverinsHub settings={settings} stories={stories} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView('home')} />;
