@@ -29,7 +29,7 @@ const ReaderSettings: React.FC<{
                 <Icon name="settings" className="w-5 h-5" />
             </button>
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-64 bg-surface rounded-lg shadow-xl z-20 p-4 border border-border-color">
+                <div className="absolute right-0 mt-2 w-64 bg-surface rounded-lg shadow-xl z-20 p-4 border border-border-color animate-palette-enter">
                     <div className="space-y-4">
                         <div>
                            <label className="text-sm font-medium text-text-secondary">Tema</label>
@@ -178,19 +178,19 @@ const bionicReadingTransform = (html: string): string => {
 };
 
 const MiniHud: React.FC<{ onTogglePanel: (panel: 'notes' | 'glossary') => void }> = ({ onTogglePanel }) => (
-    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 bg-surface/80 backdrop-blur-md rounded-full p-2 flex flex-col gap-3 border border-border-color">
-        <button onClick={() => onTogglePanel('notes')} className="p-2 hover:text-primary rounded-full"><Icon name="message-square" className="w-5 h-5"/></button>
-        <button className="p-2 hover:text-primary rounded-full"><Icon name="tag" className="w-5 h-5"/></button>
-        <button onClick={() => onTogglePanel('glossary')} className="p-2 hover:text-primary rounded-full"><Icon name="book-text" className="w-5 h-5"/></button>
+    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-30 bg-surface/80 backdrop-blur-md rounded-full p-2 flex flex-col gap-3 border border-border-color shadow-lg">
+        <button onClick={() => onTogglePanel('notes')} className="p-2 hover:text-primary rounded-full transition-colors" title="Notas"><Icon name="message-square" className="w-5 h-5"/></button>
+        <button className="p-2 hover:text-primary rounded-full transition-colors" title="Marcadores"><Icon name="tag" className="w-5 h-5"/></button>
+        <button onClick={() => onTogglePanel('glossary')} className="p-2 hover:text-primary rounded-full transition-colors" title="Glosario"><Icon name="book-text" className="w-5 h-5"/></button>
     </div>
 );
 
 const SidePanel: React.FC<{title: string; icon: IconProps['name']; onClose: () => void; children: React.ReactNode}> = ({title, icon, onClose, children}) => (
-     <div className="fixed inset-0 bg-black/70 z-40 flex justify-end" onClick={onClose}>
-         <div className="w-full max-w-md h-full bg-surface p-6 overflow-y-auto" onClick={e => e.stopPropagation()}>
-             <div className="flex justify-between items-center mb-4">
-                 <h3 className="text-xl font-bold text-primary flex items-center gap-2"><Icon name={icon}/>{title}</h3>
-                 <button onClick={onClose}><Icon name="x-circle" /></button>
+     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex justify-end animate-palette-enter" onClick={onClose}>
+         <div className="w-full max-w-md h-full bg-surface p-6 overflow-y-auto shadow-2xl animate-slide-in-right" onClick={e => e.stopPropagation()}>
+             <div className="flex justify-between items-center mb-4 pb-4 border-b border-border-color">
+                 <h3 className="text-xl font-bold text-primary flex items-center gap-2"><Icon name={icon} className="w-6 h-6"/>{title}</h3>
+                 <button onClick={onClose} className="p-1 rounded-full hover:bg-surface-light"><Icon name="x-circle" className="w-6 h-6" /></button>
              </div>
              {children}
          </div>
@@ -354,7 +354,7 @@ export const StoryReader: React.FC<StoryReaderProps> = ({ story, onBack, onUpdat
 
   const mainContent = (
     <>
-      <div ref={containerRef} className="h-full overflow-y-auto">
+      <div ref={containerRef} className="h-full overflow-y-auto" key={currentChapterId}>
             {currentChapter.illustrationUrl && !isFocusMode && (
                 <div className="mb-8 rounded-lg overflow-hidden shadow-lg">
                     <img src={currentChapter.illustrationUrl} alt={`Illustration for ${currentChapter.title}`} className="w-full h-auto object-cover" />

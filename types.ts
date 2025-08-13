@@ -22,7 +22,7 @@ export interface Chapter {
   options?: ChapterOption[]; // For branching narratives
   critique?: Record<string, { score: number; comment: string; suggestion?: string }>; // For Doctor IA
   emotionTags?: string[]; // For dynamic backgrounds, e.g., 'suspense', 'romance', 'action'
-  microSummary?: string; // For chapter lists in preview
+  microSummary: string; // For chapter lists in preview
   notes?: Note[];
 }
 

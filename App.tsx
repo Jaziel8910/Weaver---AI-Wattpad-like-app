@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Story, GenerationParams, PilotChapterResponse, SortKey, ReaderFont, ReaderTheme, Chapter, AppSettings, GenerationPreset, SweFileBundle, AccountSettings, UserTier, Friend, ProfileCardData, SecurityQuestion, ReaderDefaultSettings, Universe } from './types';
 import { generatePilotChapter, generateRemainingStory, generateCover, generateIllustration, critiqueChapter, generateStoryMetadata } from './services/geminiService';
@@ -645,11 +646,7 @@ const App: React.FC = () => {
             const wordCount = allChapters.reduce((acc, chap) => acc + chap.content.split(' ').length, 0);
             const readingTimeMinutes = Math.ceil(wordCount / 200);
             
-            const newStory: Story = { id: crypto.randomUUID(), title: pilotResponse.title, summary: pilotResponse.summary, tags: pilotResponse.tags || [], chapters: allChapters, chapterHistory: [pilotChapter.id], coverUrl, readingTimeMinutes, params, isBranching: params.enableBranching, ...metadata, weaverAgeRating: params.weaverAgeRating };
-
-            if (isKidsMode) {
-                newStory.isCuratedForKids = true;
-            }
+            const newStory: Story = { id: crypto.randomUUID(), title: pilotResponse.title, summary: pilotResponse.summary, tags: pilotResponse.tags || [], chapters: allChapters, chapterHistory: [pilotChapter.id], coverUrl, readingTimeMinutes, params, isBranching: params.enableBranching, ...metadata, weaverAgeRating: params.weaverAgeRating, isCuratedForKids: isKidsMode };
             
             setStories(prevStories => [newStory, ...prevStories]);
             setSelectedStory(newStory);
@@ -669,7 +666,10 @@ const App: React.FC = () => {
         setStories(prevStories => prevStories.map(s => s.id === updatedStory.id ? updatedStory : s));
         setSelectedStory(updatedStory);
     };
-    const handleSelectStory = (story: Story) => { setSelectedStory(story); setView('story_preview'); };
+    const handleSelectStory = (story: Story) => {
+        setSelectedStory(story);
+        setView('story_preview');
+    };
 
     const handlePurchaseTier = (tier: UserTier, durationHours: number, cost: number) => {
         if (settings.account.weaverins < cost) {

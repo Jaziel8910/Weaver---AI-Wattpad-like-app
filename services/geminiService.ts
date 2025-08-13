@@ -62,7 +62,7 @@ const pilotChapterSchema = {
                 title: { type: Type.STRING, description: "El título de este capítulo piloto específico." },
                 content: { type: Type.STRING, description: "El contenido narrativo completo del capítulo piloto, de varios párrafos de extensión." },
                 illustration_prompt: { type: Type.STRING, description: "Una descripción detallada para una ilustración de una escena clave." },
-                microSummary: { type: Type.STRING, description: "Un resumen de una frase del contenido del capítulo para vistas previas." },
+                microSummary: { type: Type.STRING, description: "Un resumen muy conciso (una sola frase) que capture la esencia del capítulo, para usar en listas de capítulos y vistas previas." },
                 options: chapterOptionsSchema
             },
             required: ["id", "title", "content", "illustration_prompt", "microSummary"],
@@ -81,7 +81,7 @@ const remainingStorySchema = {
             title: { type: Type.STRING, description: "El título de este capítulo específico." },
             content: { type: Type.STRING, description: "El contenido narrativo completo del capítulo." },
             illustration_prompt: { type: Type.STRING, description: "Una descripción detallada para una ilustración de una escena clave." },
-            microSummary: { type: Type.STRING, description: "Un resumen de una frase del contenido del capítulo para vistas previas." },
+            microSummary: { type: Type.STRING, description: "Un resumen muy conciso (una sola frase) que capture la esencia del capítulo, para usar en listas de capítulos y vistas previas." },
             options: chapterOptionsSchema,
         },
         required: ["id", "title", "content", "illustration_prompt", "microSummary"],

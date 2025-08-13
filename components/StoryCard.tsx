@@ -89,8 +89,9 @@ export const StoryCard: React.FC<StoryCardProps> = ({ story, onSelect, onDelete,
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent"></div>
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{background: 'radial-gradient(circle at center, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 60%)'}}></div>
         {story.isCuratedForKids && (
-            <div className="absolute top-2 left-2 z-10 p-1.5 bg-green-500/80 rounded-full text-white" title="Apto para Niños">
-                <Icon name="check" className="w-4 h-4"/>
+             <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-green-500/90 rounded-full text-white text-xs font-bold flex items-center gap-1 backdrop-blur-sm shadow-lg" title="Curado para Niños">
+                <Icon name="star" className="w-3 h-3 fill-current"/>
+                <span>Para Niños</span>
             </div>
         )}
         <div className="absolute top-2 right-2 z-10 flex gap-2">
