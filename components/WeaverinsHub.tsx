@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
-import type { AppSettings, Quests } from '../types';
+import type { AppSettings, Quests, Story } from '../types';
 import { Icon } from './Icon';
 
 interface WeaverinsHubProps {
   settings: AppSettings;
+  stories: Story[];
   onUpdateAccountSettings: (updatedSettings: Partial<AppSettings['account']>) => void;
   onBack: () => void;
 }
 
-const QuestCard: React.FC<{ questId: keyof Quests; title: string; description: string; reward: number; isCompleted: boolean; }> = ({ title, description, reward, isCompleted }) => {
+const QuestCard: React.FC<{ questId: keyof Quests | string; title: string; description: string; reward: number; isCompleted: boolean; }> = ({ title, description, reward, isCompleted }) => {
     return (
         <div className={`p-4 rounded-lg flex items-center justify-between transition-all ${isCompleted ? 'bg-green-500/10 border border-green-500/30' : 'bg-surface border border-border-color'}`}>
             <div className="flex items-center gap-4">
@@ -29,7 +30,7 @@ const QuestCard: React.FC<{ questId: keyof Quests; title: string; description: s
 };
 
 
-export const WeaverinsHub: React.FC<WeaverinsHubProps> = ({ settings, onUpdateAccountSettings, onBack }) => {
+export const WeaverinsHub: React.FC<WeaverinsHubProps> = ({ settings, stories, onUpdateAccountSettings, onBack }) => {
     const { account } = settings;
     const { weaverins, savingsGoal, stingyMode, quests } = account;
     const [newGoal, setNewGoal] = useState(savingsGoal);
@@ -51,6 +52,30 @@ export const WeaverinsHub: React.FC<WeaverinsHubProps> = ({ settings, onUpdateAc
         { id: 'firstFriendAdded', title: 'Socialité', description: 'Añade a tu primer amigo.', reward: 75 },
         { id: 'firstPresetSaved', title: 'Maestro de la Eficiencia', description: 'Guarda tu primer preajuste de generación.', reward: 25 },
     ] as const;
+
+    const dynamicQuests = [
+        {
+            id: 'horrorMaster',
+            title: 'Maestro del Suspense',
+            description: 'Escribe 3 historias de terror.',
+            reward: 200,
+            isCompleted: stories.filter(s => s.params.genres.includes('Terror')).length >= 3
+        },
+        {
+            id: 'epicWriter',
+            title: 'Escritor de Sagas',
+            description: 'Completa 5 historias de 10 capítulos o más.',
+            reward: 500,
+            isCompleted: stories.filter(s => s.chapters.length >= 10).length >= 5
+        },
+         {
+            id: 'universeCreator',
+            title: 'Arquitecto de Mundos',
+            description: 'Crea tu primer Universo en el Universe Hub.',
+            reward: 150,
+            isCompleted: (settings as any).universes?.length > 0 // A safe way to check, assuming universes might be passed in future
+        }
+    ];
 
     return (
         <div className="max-w-4xl mx-auto p-4 sm:p-8">
@@ -77,6 +102,9 @@ export const WeaverinsHub: React.FC<WeaverinsHubProps> = ({ settings, onUpdateAc
                     <div className="space-y-3">
                         {allQuests.map(q => (
                             <QuestCard key={q.id} questId={q.id} title={q.title} description={q.description} reward={q.reward} isCompleted={quests[q.id]} />
+                        ))}
+                        {dynamicQuests.map(q => (
+                            <QuestCard key={q.id} questId={q.id} title={q.title} description={q.description} reward={q.reward} isCompleted={q.isCompleted} />
                         ))}
                     </div>
                 </div>

@@ -1,6 +1,7 @@
 
+
 import React, { useState, useEffect } from 'react';
-import { generateIllustration } from '../services/geminiService';
+import { generateIllustration, generateInspirationIdea } from '../services/geminiService';
 import { Icon } from './Icon';
 import type { AppSettings, UserTier, OpenLibraryBook } from '../types';
 import { ProBadge } from './ProBadge';
@@ -15,6 +16,7 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({ settings, on
     const [prompt, setPrompt] = useState('');
     const [images, setImages] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [isGeneratingIdea, setIsGeneratingIdea] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [generations, setGenerations] = useState(0);
 
@@ -63,6 +65,14 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({ settings, on
             setIsLoading(false);
         }
     };
+    
+    const handleGenerateRandomIdea = async () => {
+        setIsGeneratingIdea(true);
+        const favoriteGenre = settings.account.favoriteGenres[0] || 'Fantasía';
+        const idea = await generateInspirationIdea(favoriteGenre);
+        setPrompt(idea);
+        setIsGeneratingIdea(false);
+    }
 
     const handleBookSearch = async () => {
         if (!bookQuery) return;
@@ -96,6 +106,17 @@ export const InspirationBoard: React.FC<InspirationBoardProps> = ({ settings, on
                 <p className="mt-2 text-text-secondary max-w-2xl mx-auto">
                     ¿No sabes por dónde empezar? Describe una idea, una atmósfera o un estilo, y deja que la IA cree un moodboard visual para ti.
                 </p>
+            </div>
+            
+             <div className="flex justify-center mb-4">
+                 <button 
+                    onClick={handleGenerateRandomIdea}
+                    disabled={isGeneratingIdea}
+                    className="flex items-center gap-2 px-4 py-2 bg-surface-light border border-border-color text-text-main font-semibold rounded-md hover:bg-primary-hover hover:text-white transition-colors disabled:opacity-50"
+                >
+                    <Icon name={isGeneratingIdea ? 'loader' : 'dice-5'} className={isGeneratingIdea ? 'animate-spin' : ''} />
+                    Dame una idea aleatoria
+                </button>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2 mb-8">

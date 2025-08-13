@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, GenerateContentResponse, Part, HarmCategory, HarmBlockThreshold } from "@google/genai";
-import type { GenerationParams, PilotChapterResponse, RemainingStoryResponse, ImageQuality, Character, Story, WeaverAgeRating, Chapter } from '../types';
+import type { GenerationParams, PilotChapterResponse, RemainingStoryResponse, ImageQuality, Character, Story, WeaverAgeRating, Chapter, Genre } from '../types';
 
 if (!process.env.API_KEY) {
     throw new Error("API_KEY environment variable not set");
@@ -319,12 +319,13 @@ export const generateCharacterNames = async (role: Character['role'], genre: str
     }
 };
 
-export const generateCover = async (title: string, summary: string, genres: string[], quality: ImageQuality): Promise<string> => {
+export const generateCover = async (title: string, summary: string, genres: string[], quality: ImageQuality, negativePrompt?: string): Promise<string> => {
     const prompt = `
       Una portada de libro digital ${quality === 'Alta' ? 'hiperdetallada, cinematográfica y épica' : 'atractiva y atmosférica'} para una historia titulada "${title}".
       Géneros: ${genres.join(', ')}.
       Resumen de la trama: ${summary}.
       Estilo artístico dramático, de alta calidad que refleje los géneros. Evita el texto en la imagen.
+      ${negativePrompt ? `\n\nNegative prompt: ${negativePrompt}` : ''}
     `;
     
     try {
@@ -344,12 +345,13 @@ export const generateCover = async (title: string, summary: string, genres: stri
     }
 };
 
-export const generateIllustration = async (prompt: string, defaultStyle: string, quality: ImageQuality, customStyle?: string): Promise<string> => {
+export const generateIllustration = async (prompt: string, defaultStyle: string, quality: ImageQuality, customStyle?: string, negativePrompt?: string): Promise<string> => {
     const finalStyle = customStyle || defaultStyle;
     const fullPrompt = `
       Ilustración para un capítulo de una historia.
       Descripción de la escena: ${prompt}
       Estilo artístico: ${finalStyle}, ${quality === 'Alta' ? 'evocador, detallado y atmosférico' : 'evocador y atmosférico'}. Coherente con una narrativa de libro. Sin texto.
+      ${negativePrompt ? `\n\nNegative prompt: ${negativePrompt}` : ''}
     `;
     
     try {
@@ -434,5 +436,52 @@ export const critiqueChapter = async (chapterContent: string): Promise<any> => {
     } catch (error) {
         console.error("Error al generar la crítica:", error);
         throw new Error("No se pudo generar el análisis del Doctor IA.");
+    }
+};
+
+export const generateInspirationIdea = async (genre: string): Promise<string> => {
+    const prompt = `Generate a single, creative and concise story idea for the genre: '${genre}'. The idea should be a single, intriguing sentence.`;
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+        });
+        return response.text.trim();
+    } catch (error) {
+        console.error("Error generating inspiration idea:", error);
+        return "Un astronauta solitario descubre un secreto en una luna desolada.";
+    }
+};
+
+export const suggestGenres = async (plot: string): Promise<Genre[]> => {
+    const genresList: Genre[] = ['Ciencia Ficción', 'Fantasía', 'Romance', 'Terror', 'Misterio', 'Aventura', 'Drama', 'Comedia', 'Thriller', 'Histórico', 'Cyberpunk'];
+    const prompt = `Basado en el siguiente esquema de la trama, sugiere hasta 3 géneros relevantes de esta lista: [${genresList.join(', ')}]. Trama: "${plot}"`;
+    
+    const schema = {
+        type: Type.OBJECT,
+        properties: {
+            genres: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+            }
+        },
+        required: ["genres"]
+    };
+
+    try {
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            }
+        });
+        const parsed = JSON.parse(response.text);
+        // Filter to ensure only valid genres are returned
+        return parsed.genres.filter((g: any) => genresList.includes(g));
+    } catch (error) {
+        console.error("Error suggesting genres:", error);
+        return [];
     }
 };

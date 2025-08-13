@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef } from 'react';
 import type { AppSettings, WritingStyle, AILanguage, Language, StartupView, UserTier, Genre, PointOfView, ImageQuality, AvatarFrame, AccountSettings, Story, WeaverAgeRating } from '../types';
 import { Icon, type IconProps } from './Icon';
@@ -591,6 +592,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                     <SettingRow>
                         <SettingLabel title="Compartir Datos Analíticos" description="Ayúdanos a mejorar la app compartiendo datos de uso anónimos." />
                         <SettingControl><Toggle checked={settings.privacy.shareAnalytics} onChange={v => handleUpdate('privacy', 'shareAnalytics', v)}/></SettingControl>
+                    </SettingRow>
+                     <SettingRow>
+                        <SettingLabel title="Programa Beta de Weaver" description="Participa para probar nuevas funcionalidades antes que nadie y ayúdanos a mejorar la app." />
+                        <SettingControl><Toggle checked={!!settings.privacy.betaTester} onChange={v => handleUpdate('privacy', 'betaTester', v)}/></SettingControl>
                     </SettingRow>
                      <SettingRow>
                         <SettingLabel title="Exportar mis Datos" description="Descarga un archivo con todos los datos de tu cuenta." />

@@ -1,8 +1,9 @@
 
 
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import type { Story, GenerationParams, PilotChapterResponse, SortKey, ReaderFont, ReaderTheme, Chapter, AppSettings, GenerationPreset, SweFileBundle, AccountSettings, UserTier, Friend, ProfileCardData, SecurityQuestion, ReaderDefaultSettings, Universe } from './types';
-import { generatePilotChapter, generateRemainingStory, generateCover, generateIllustration, critiqueChapter, generateStoryMetadata } from './services/geminiService';
+import { generatePilotChapter, generateRemainingStory, generateCover, generateIllustration, critiqueChapter, generateStoryMetadata, updateCharacterMemory } from './services/geminiService';
 import { encryptForFile, decryptFromFile, createProfileCard, verifyProfileCard, generateSigningKeyPair, hashText, createPasskey } from './services/cryptoService';
 import { GenerationForm } from './components/GenerationForm';
 import { StoryCard } from './components/StoryCard';
@@ -244,7 +245,7 @@ const App: React.FC = () => {
         storage: { autoSaveEnabled: false, autoSaveInterval: 60, maxCacheSizeMB: 500, autoClearCache: false, quickAccessVault: null },
         connection: { downloadIllustrationsOnWifiOnly: false, syncOnWifiOnly: true, dataSaverMode: false },
         social: { profileVisibility: 'Privado', showOnlineStatus: true, allowFriendRequests: true, allowStoryComments: 'friends', friendsList: [], blockedUsers: [] },
-        privacy: { dataProcessingConsent: true, shareAnalytics: true },
+        privacy: { dataProcessingConsent: true, shareAnalytics: true, betaTester: false },
         keybindings: { nextPage: 'ArrowRight', prevPage: 'ArrowLeft', toggleFocusMode: 'f', openSettings: 'ctrl+s', newStory: 'ctrl+n', commandPalette: 'ctrl+k' },
     };
 
@@ -626,7 +627,7 @@ const App: React.FC = () => {
             setLoadingMessage('Generando capítulos restantes...');
             const remainingStoryData = await generateRemainingStory(params, pilotResponse, [pilotResponse.pilotChapter as Chapter], feedback);
             setLoadingMessage('Diseñando una portada épica...');
-            const coverUrl = await generateCover(pilotResponse.title, pilotResponse.summary, params.genres, imageQuality);
+            const coverUrl = await generateCover(pilotResponse.title, pilotResponse.summary, params.genres, imageQuality, params.negativeIllustrationPrompt);
             setLoadingMessage('Analizando la historia...');
             const metadata = await generateStoryMetadata(pilotResponse.title, pilotResponse.summary, params.genres, params.weaverAgeRating || 'Teen');
 
@@ -638,7 +639,7 @@ const App: React.FC = () => {
                 for (let i = 0; i < allChapters.length; i++) {
                     if (allChapters[i].illustrationPrompt) {
                         setLoadingMessage(`Ilustrando capítulo ${i + 1} de ${allChapters.length}...`);
-                        allChapters[i].illustrationUrl = await generateIllustration(allChapters[i].illustrationPrompt!, defaultStyle, imageQuality, params.customIllustrationStyle);
+                        allChapters[i].illustrationUrl = await generateIllustration(allChapters[i].illustrationPrompt!, defaultStyle, imageQuality, params.customIllustrationStyle, params.negativeIllustrationPrompt);
                     }
                 }
             }
@@ -662,10 +663,49 @@ const App: React.FC = () => {
     };
 
     const handleDeleteStory = (e: React.MouseEvent, storyId: string) => { /* ... unchanged ... */ };
-    const handleUpdateStory = (updatedStory: Story) => {
-        setStories(prevStories => prevStories.map(s => s.id === updatedStory.id ? updatedStory : s));
-        setSelectedStory(updatedStory);
+    
+    const handleUpdateStory = async (updatedStory: Story) => {
+        const oldStory = stories.find(s => s.id === updatedStory.id);
+        let storyToUpdate = { ...updatedStory };
+
+        // Check if a new chapter was chosen in a branching narrative
+        if (oldStory && oldStory.chapterHistory.length < storyToUpdate.chapterHistory.length) {
+            const lastChapterId = oldStory.chapterHistory[oldStory.chapterHistory.length - 1];
+            const lastChapter = oldStory.chapters.find(c => c.id === lastChapterId);
+
+            if (lastChapter) {
+                const updatedCharacters = [...storyToUpdate.params.characters]; // Create a mutable copy
+
+                for (let i = 0; i < updatedCharacters.length; i++) {
+                    const char = updatedCharacters[i];
+                    // Only update memory for key characters to save API calls
+                    if (char.role === 'Protagonista' || char.role === 'Antagonista') { 
+                        try {
+                            const newMemories = await updateCharacterMemory(char.name, lastChapter.content);
+                            if (newMemories.length > 0) {
+                                const currentMemories = char.memoryVector || [];
+                                // Keep last 7 memories to avoid an infinitely growing vector
+                                const combinedMemories = [...currentMemories, ...newMemories];
+                                updatedCharacters[i] = {
+                                    ...char,
+                                    memoryVector: combinedMemories.slice(-7) 
+                                };
+                            }
+                        } catch (e) {
+                            console.error(`Failed to update memory for ${char.name}`, e);
+                        }
+                    }
+                }
+                storyToUpdate = { ...storyToUpdate, params: { ...storyToUpdate.params, characters: updatedCharacters } };
+            }
+        }
+
+        setStories(prevStories => prevStories.map(s => s.id === storyToUpdate.id ? storyToUpdate : s));
+        if (selectedStory?.id === storyToUpdate.id) {
+            setSelectedStory(storyToUpdate);
+        }
     };
+    
     const handleSelectStory = (story: Story) => {
         setSelectedStory(story);
         setView('story_preview');
@@ -849,7 +889,7 @@ const App: React.FC = () => {
             case 'settings': return <Settings settings={settings} onUpdateSettings={handleUpdateSettings} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView(settings.general.uiMode === 'kids' ? 'home' : 'profile')} effectiveTier={effectiveTier} onPurchaseTier={handlePurchaseTier} tierPrices={TIER_PRICES} onRefundLastPurchase={handleRefund} />;
             case 'fandom': return <FandomScreen />;
             case 'universe_hub': return <UniverseHub universes={universes} onUpdateUniverses={handleUpdateUniverses} effectiveTier={effectiveTier} onBack={() => setView('home')} />;
-            case 'weaverins_hub': return <WeaverinsHub settings={settings} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView('home')} />;
+            case 'weaverins_hub': return <WeaverinsHub settings={settings} stories={stories} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView('home')} />;
             case 'story_preview': return selectedStory && <StoryPreview story={selectedStory} onBack={() => setView('home')} onStartReading={() => setView('reading')} />;
             case 'inspiration_board': return <InspirationBoard settings={settings} onContinue={(prompt) => { setInspirationPrompt(prompt); setView('form'); }} effectiveTier={effectiveTier} />;
             case 'profile': return <ProfilePage settings={settings} stories={stories} onUpdateAccountSettings={handleUpdateAccountSettings} onBack={() => setView('home')} onNavigateToSettings={() => setView('settings')} />;

@@ -158,6 +158,7 @@ export interface GenerationParams {
   inspirationPrompt?: string; // From the inspiration board
   enableBranching: boolean; // New option to enable interactive stories
   customIllustrationStyle?: string; // Pro feature
+  negativeIllustrationPrompt?: string; // Pro feature
   activePluginId?: string; // For style plugins
   contentRating: ContentRating; // Legacy
   // New fields
@@ -383,6 +384,7 @@ export interface SocialSettings {
 export interface PrivacySettings {
     dataProcessingConsent: boolean;
     shareAnalytics: boolean;
+    betaTester?: boolean;
 }
 
 export interface KeybindingsSettings {

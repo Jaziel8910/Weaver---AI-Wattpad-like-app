@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { GenerationParams, Character, Genre, StoryType, Complexity, ChapterLength, WritingStyle, PointOfView, Tone, Pacing, GenerationPreset, ContextFile, UserTier, ContentRating, Universe, WeaverAgeRating } from '../types';
 import { Icon, type IconProps } from './Icon';
 import { FileUpload } from './FileUpload';
-import { generateCharacterNames } from '../services/geminiService';
+import { generateCharacterNames, suggestGenres } from '../services/geminiService';
 import { ProBadge } from './ProBadge';
 
 interface GenerationFormProps {
@@ -57,6 +57,7 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
     inspirationPrompt: initialInspiration,
     enableBranching: false,
     customIllustrationStyle: '',
+    negativeIllustrationPrompt: 'texto, firmas, desenfoque',
     contentRating: 'Teen',
     weaverAgeRating: 'Teen',
     universeId: '',
@@ -65,6 +66,8 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
   const [isPresetDropdownOpen, setIsPresetDropdownOpen] = useState(false);
   const [nameSuggestions, setNameSuggestions] = useState<{ [charId: string]: string[] }>({});
   const [isSuggestingName, setIsSuggestingName] = useState<string | null>(null);
+  const [isSuggestingGenres, setIsSuggestingGenres] = useState(false);
+
 
   const isEssentialsOrHigher = effectiveTier === 'essentials' || effectiveTier === 'pro' || effectiveTier === 'ultra';
   const isProOrHigher = effectiveTier === 'pro' || effectiveTier === 'ultra';
@@ -126,6 +129,19 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
       const suggestions = await generateCharacterNames(char.role, params.genres[0] || 'General');
       setNameSuggestions(prev => ({ ...prev, [char.id]: suggestions }));
       setIsSuggestingName(null);
+  }
+
+  const handleSuggestGenres = async () => {
+    if(!params.plotOutline) {
+        alert("Por favor, escribe primero un esquema de la trama para sugerir géneros.");
+        return;
+    }
+    setIsSuggestingGenres(true);
+    const suggested = await suggestGenres(params.plotOutline);
+    if(suggested.length > 0) {
+        handleParamChange('genres', suggested);
+    }
+    setIsSuggestingGenres(false);
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -243,7 +259,13 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
                 <p className="text-xs text-text-secondary mt-1">{isLegacyMode ? 'La vinculación con Universos está desactivada en el modo de compatibilidad.' : 'Vincula esta historia a un universo que hayas creado en el Hub de Universos.'}</p>
             </div>
             <div className="mt-6">
-                <label className="block text-sm font-medium text-text-secondary">Géneros</label>
+                 <div className="flex items-center gap-4 mb-2">
+                    <label className="block text-sm font-medium text-text-secondary">Géneros</label>
+                    <button type="button" onClick={handleSuggestGenres} disabled={isSuggestingGenres || !params.plotOutline} className="text-xs flex items-center gap-1 text-primary hover:text-primary-hover disabled:opacity-50" title="Sugerir géneros basados en la trama">
+                        {isSuggestingGenres ? <Icon name="loader" className="w-4 h-4" /> : <Icon name="sparkles" className="w-4 h-4"/>}
+                        Sugerir
+                    </button>
+                </div>
                 <div className="mt-2 flex flex-wrap gap-2">
                     {genres.map(genre => (
                         <button type="button" key={genre} onClick={() => handleGenreToggle(genre)} className={`px-3 py-1 text-xs font-medium rounded-full border ${params.genres.includes(genre) ? 'bg-primary border-primary text-white' : 'bg-surface border-border-color hover:border-primary'}`}>{genre}</button>
@@ -374,6 +396,19 @@ export const GenerationForm: React.FC<GenerationFormProps> = ({ onGenerate, isLo
                         </div>
                         {!isProOrHigher && <ProBadge tierName='PRO' isLocked />}
                     </label>
+                    {params.generateIllustrations && isProOrHigher && (
+                         <div className="mt-4 pl-7">
+                             <label htmlFor="negativeIllustrationPrompt" className="block text-sm font-medium text-text-secondary">Prompt Negativo</label>
+                            <textarea 
+                                id="negativeIllustrationPrompt" 
+                                value={params.negativeIllustrationPrompt} 
+                                onChange={e => handleParamChange('negativeIllustrationPrompt', e.target.value)} 
+                                rows={2} 
+                                className="mt-1 block w-full bg-surface-light border border-border-color rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm" 
+                                placeholder="Elementos a evitar en la imagen (ej: texto, firmas, mala anatomía)..."
+                            />
+                        </div>
+                    )}
                 </div>
                 <div className="p-4 rounded-md bg-brand-bg border border-border-color">
                      <label className="flex items-center justify-between">
