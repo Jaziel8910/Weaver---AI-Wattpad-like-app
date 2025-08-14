@@ -1,5 +1,6 @@
 
 
+
 export interface ChapterOption {
   text: string;
   nextChapterId: string;
@@ -64,7 +65,6 @@ export interface Story {
   readingTimeMinutes: number;
   params: GenerationParams;
   isBranching?: boolean; // Flag to indicate if the story has branches
-  loreBook?: LoreEntry[]; // For World Anvil feature
   ageRating?: string; // Kept for backwards compatibility
   weaverAgeRating?: WeaverAgeRating;
   starRating?: number;
@@ -101,10 +101,11 @@ export interface ContextFile {
     content: string; // text content or base64 data URL for images
 }
 
-export interface Relationship {
-    characterId: string;
-    characterName: string;
-    type: string; // e.g., 'Amigo', 'Enemigo', 'Padre', 'Hijo'
+export interface UniverseRelationship {
+    id: string;
+    character1Id: string;
+    character2Id: string;
+    type: string;
     description: string;
 }
 
@@ -124,7 +125,6 @@ export interface Character {
     // New fields
     age?: number | string;
     status?: 'Vivo' | 'Muerto' | 'Desaparecido' | 'Otro Universo';
-    relationships?: Relationship[];
     powers?: string[];
     backstory?: string;
     characterArcs?: CharacterArc[];
@@ -408,19 +408,21 @@ export interface Universe {
     id: string;
     name: string;
     description: string;
-    timeline: any; // Placeholder for timeline data structure
+    timeline: any; 
     worldMapUrl?: string;
     history: string;
-    worldLaws: string; // e.g., laws of magic, physics
-    // --- EXPANDED BETA FIELDS ---
+    worldLaws: string;
     races?: { id: string; name: string; description: string; }[];
     magicSystems?: { id: string; name: string; description: string; }[];
     technologies?: { id: string; name: string; description: string; }[];
-    // --- END EXPANDED BETA FIELDS ---
     storyIds: string[];
-    characterIds: string[];
-    ownerId: string;
+    
+    // Unified Lore, Characters, and Worldbuilding
+    lore: LoreEntry[];
+    characters: Character[];
+    relationships: UniverseRelationship[];
 }
+
 
 export interface AppSettings {
     general: GeneralSettings;

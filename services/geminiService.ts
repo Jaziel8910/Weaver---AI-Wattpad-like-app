@@ -99,7 +99,7 @@ const getWordCountTarget = (length: GenerationParams['chapterLength']): number =
 
 const buildPromptBase = (params: GenerationParams, story?: Story, allUniverses?: Universe[]) => {
     let basePrompt = '';
-    const { storyType, fandom, setting, genres, characters, plotOutline, writingStyle, pointOfView, complexity, tone, pacing, inspirationPrompt, weaverAgeRating, crossoverUniverseIds } = params;
+    const { storyType, fandom, setting, genres, characters, plotOutline, writingStyle, pointOfView, complexity, tone, pacing, inspirationPrompt, weaverAgeRating, crossoverUniverseIds, universeId } = params;
     
     // Crossover Event Handling
     if (crossoverUniverseIds && allUniverses && crossoverUniverseIds.length > 0) {
@@ -119,7 +119,27 @@ const buildPromptBase = (params: GenerationParams, story?: Story, allUniverses?:
         return `- ${c.name} (${c.role}): ${c.description}${memory}`;
     }).join('\n');
 
-    const loreBookEntries = story?.loreBook?.map(l => `- ${l.title} (${l.category}): ${l.content}`).join('\n');
+    let universeContext = '';
+    if (universeId && allUniverses) {
+        const universe = allUniverses.find(u => u.id === universeId);
+        if (universe) {
+            const loreEntries = (universe.lore || []).map(l => `- ${l.title} (${l.category}): ${l.content}`).join('\n');
+            if (loreEntries) {
+                universeContext += `\n**LIBRO DE LORE DEL UNIVERSO (Referencia Clave):**\n${loreEntries}\n`;
+            }
+
+            const relationships = (universe.relationships || []).map(rel => {
+                const char1 = (universe.characters || []).find(c => c.id === rel.character1Id)?.name;
+                const char2 = (universe.characters || []).find(c => c.id === rel.character2Id)?.name;
+                if(char1 && char2) return `- ${char1} y ${char2}: ${rel.description} (${rel.type}).`;
+                return null;
+            }).filter(Boolean).join('\n');
+
+            if (relationships) {
+                universeContext += `\n**RELACIONES IMPORTANTES EN EL UNIVERSO:**\n${relationships}\n`;
+            }
+        }
+    }
 
     basePrompt += `
       **TIPO DE HISTORIA:** ${storyType}
@@ -137,7 +157,7 @@ const buildPromptBase = (params: GenerationParams, story?: Story, allUniverses?:
       **PERSONAJES PRINCIPALES:**
       ${characterDescriptions}
 
-      ${loreBookEntries ? `**LIBRO DE LORE DEL MUNDO (Referencia Clave):**\n${loreBookEntries}\n` : ''}
+      ${universeContext}
 
       **ESQUEMA DE LA TRAMA:**
       ${plotOutline || "El autor no ha proporcionado un esquema. Crea una trama atractiva basada en los demás parámetros."}
